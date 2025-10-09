@@ -36,26 +36,6 @@ function Lights() {
   );
 }
 
-// ✅ TPS CAMERA FOLLOW COMPONENT
-function TPSCamera({ target, rotation }: { target: THREE.Vector3; rotation: THREE.Euler }) {
-  const camRef = useRef<THREE.PerspectiveCamera | null>(null);
-  useFrame((state, delta) => {
-    if (!camRef.current) camRef.current = state.camera;
-    const camera = state.camera;
-    const offset = new THREE.Vector3(0, 3, 6);
-
-    // Rotate offset to always stay behind player
-    const rotatedOffset = offset
-      .clone()
-      .applyAxisAngle(new THREE.Vector3(0, 1, 0), rotation.y);
-
-    const desiredPosition = target.clone().add(rotatedOffset);
-    camera.position.lerp(desiredPosition, 0.1);
-    camera.lookAt(target);
-  });
-  return null;
-}
-
 export function Scene3D() {
   const navigate = useNavigate();
   const [nearPortal, setNearPortal] = useState<string | null>(null);
@@ -81,15 +61,14 @@ export function Scene3D() {
           <Lights />
           <Stars radius={100} depth={50} count={5000} factor={4} fade />
           <Ground />
-          <Player
-            onPositionChange={setPlayerPos}
-            onRotationChange={setPlayerRot}
-            portals={[]}
-            walls={[]}
-            onPortalProximity={setNearPortal}
-            onPortalEnter={handlePortalEnter}
-          />
-          <TPSCamera target={playerPos} rotation={playerRot} />
+         <Player 
+  onPositionChange={setPlayerPosition}
+  portals={portals}
+  walls={wallCollisions}
+  onPortalProximity={onPortalProximity}
+  onPortalEnter={onPortalEnter}
+/>
+          
         </Canvas>
       </KeyboardControls>
 
