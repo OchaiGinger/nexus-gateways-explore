@@ -1,98 +1,124 @@
-import { useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { KeyboardControls, Stars } from "@react-three/drei";
-import { useNavigate } from "react-router-dom";
+"use client";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { OrbitControls, KeyboardControls, Html } from "@react-three/drei";
 import * as THREE from "three";
-import { Player } from "./Player";
+import { Suspense, useRef, useEffect } from "react";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
-const keyboardMap = [
-  { name: "forward", keys: ["ArrowUp", "KeyW"] },
-  { name: "backward", keys: ["ArrowDown", "KeyS"] },
-  { name: "left", keys: ["ArrowLeft", "KeyA"] },
-  { name: "right", keys: ["ArrowRight", "KeyD"] },
-];
+function Player() {
+  const groupRef = useRef<THREE.Group>(null);
+  const velocity = useRef(new THREE.Vector3());
+  const direction = useRef(new THREE.Vector3());
+  const forward = useRef(false);
+  const backward = useRef(false);
+  const left = useRef(false);
+  const right = useRef(false);
 
-function Ground() {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[200, 200]} />
-      <meshStandardMaterial color="#0a0a1f" roughness={0.8} metalness={0.2} />
-    </mesh>
+  // 🧍 Load Mixamo model
+  const gltf = useLoader(
+    GLTFLoader,
+    "https://jqmapu5497.ufs.sh/f/86WEsYzUhV0NYnB7tJPFvmtf0nsaREkx1yPSNdU3V4igpuDw"
   );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "w") forward.current = true;
+      if (e.key === "s") backward.current = true;
+      if (e.key === "a") left.current = true;
+      if (e.key === "d") right.current = true;
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "w") forward.current = false;
+      if (e.key === "s") backward.current = false;
+      if (e.key === "a") left.current = false;
+      if (e.key === "d") right.current = false;
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
+  // 🧠 Add model to group once loaded
+  useEffect(() => {
+    if (gltf && groupRef.current) {
+      gltf.scene.scale.set(1.2, 1.2, 1.2);
+      gltf.scene.position.set(0, 0, 0);
+      groupRef.current.add(gltf.scene);
+    }
+  }, [gltf]);
+
+  useFrame((state, delta) => {
+    if (!groupRef.current) return;
+
+    direction.current.set(0, 0, 0);
+    if (forward.current) direction.current.z -= 1;
+    if (backward.current) direction.current.z += 1;
+    if (left.current) direction.current.x -= 1;
+    if (right.current) direction.current.x += 1;
+
+    const speed = 6;
+    if (direction.current.length() > 0) {
+      direction.current.normalize();
+      velocity.current.lerp(direction.current.multiplyScalar(speed), 0.15);
+
+      const targetAngle = Math.atan2(direction.current.x, direction.current.z);
+      groupRef.current.rotation.y = THREE.MathUtils.lerpAngle(
+        groupRef.current.rotation.y,
+        targetAngle,
+        0.2
+      );
+    } else {
+      velocity.current.lerp(new THREE.Vector3(), 0.1);
+    }
+
+    groupRef.current.position.x += velocity.current.x * delta;
+    groupRef.current.position.z += velocity.current.z * delta;
+
+    // 🎥 Smooth follow camera
+    const camOffset = new THREE.Vector3(0, 3, 6);
+    const rotatedOffset = camOffset.clone().applyAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      groupRef.current.rotation.y
+    );
+    const camPos = groupRef.current.position.clone().add(rotatedOffset);
+    state.camera.position.lerp(camPos, 0.1);
+    state.camera.lookAt(groupRef.current.position);
+  });
+
+  return <group ref={groupRef} position={[0, 0, 0]} />;
 }
 
-function Lights() {
+function Scene() {
   return (
     <>
-      <ambientLight intensity={1.5} />
-      <directionalLight position={[5, 10, 5]} intensity={2} castShadow />
-      <pointLight position={[0, 10, 0]} intensity={1.2} color="#00ffff" />
+      {/* ☀️ Lights */}
+      <ambientLight intensity={1.2} />
+      <directionalLight position={[10, 10, 5]} intensity={2} castShadow />
+      <hemisphereLight intensity={0.6} />
+
+      {/* 🧍 Player */}
+      <Suspense fallback={<Html center>Loading character...</Html>}>
+        <Player />
+      </Suspense>
+
+      {/* 🟩 Ground */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#5f8260" />
+      </mesh>
+
+      <OrbitControls enablePan={false} />
     </>
   );
 }
 
-export function Scene3D() {
-  const navigate = useNavigate();
-  const [nearPortal, setNearPortal] = useState<string | null>(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [transitioningPortal, setTransitioningPortal] = useState("");
-  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1, 0));
-
-  const portals = [
-    { position: [10, 0, 0] as [number, number, number], route: "/about", label: "About" },
-    { position: [-10, 0, 0] as [number, number, number], route: "/shop", label: "Shop" },
-  ];
-
-  const handlePortalEnter = (route: string, label: string) => {
-    setIsTransitioning(true);
-    setTransitioningPortal(label);
-    setTimeout(() => {
-      navigate(route);
-      setIsTransitioning(false);
-      setTransitioningPortal("");
-    }, 1500);
-  };
-
+export default function App() {
   return (
-    <div style={{ width: "100vw", height: "100vh", position: "fixed" }}>
-      <KeyboardControls map={keyboardMap}>
-        <Canvas shadows camera={{ position: [0, 3, 10], fov: 60 }}>
-          <color attach="background" args={["#000010"]} />
-          <Lights />
-          <Stars radius={100} depth={50} count={5000} factor={4} fade />
-          <Ground />
-          <Player
-            onPositionChange={setPlayerPos}
-            portals={portals}
-            onPortalProximity={setNearPortal}
-            onPortalEnter={handlePortalEnter}
-          />
-        </Canvas>
-      </KeyboardControls>
-
-      {/* ✅ Portal proximity indicator */}
-      {nearPortal && !isTransitioning && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            background: "rgba(0,0,0,0.8)",
-            color: "#00ffff",
-            padding: "20px 40px",
-            border: "2px solid #00ffff",
-            borderRadius: "15px",
-            fontSize: "1.5rem",
-            fontWeight: "bold",
-            textAlign: "center",
-            boxShadow: "0 0 30px rgba(0,212,255,0.5)",
-          }}
-        >
-          🚪 {nearPortal}
-        </div>
-      )}
-    </div>
+    <Canvas shadows camera={{ position: [0, 3, 10], fov: 55 }}>
+      <Scene />
+    </Canvas>
   );
 }
-
