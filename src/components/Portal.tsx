@@ -1,6 +1,5 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useNavigate } from "react-router-dom";
 import * as THREE from "three";
 import { Text } from "@react-three/drei";
 
@@ -8,13 +7,11 @@ interface PortalProps {
   position: [number, number, number];
   color: string;
   label: string;
-  route: string;
 }
 
-export function Portal({ position, color, label, route }: PortalProps) {
+export function Portal({ position, color, label }: PortalProps) {
   const outerRingRef = useRef<THREE.Mesh>(null);
   const innerRingRef = useRef<THREE.Mesh>(null);
-  const navigate = useNavigate();
 
   useFrame((state) => {
     if (outerRingRef.current) {
@@ -28,20 +25,10 @@ export function Portal({ position, color, label, route }: PortalProps) {
     }
   });
 
-  const handleClick = () => {
-    navigate(route);
-  };
-
   return (
     <group position={position}>
       {/* Outer ring */}
-      <mesh ref={outerRingRef} onClick={handleClick} onPointerOver={(e) => {
-        e.stopPropagation();
-        document.body.style.cursor = 'pointer';
-      }}
-      onPointerOut={() => {
-        document.body.style.cursor = 'default';
-      }}>
+      <mesh ref={outerRingRef}>
         <torusGeometry args={[2, 0.1, 16, 32]} />
         <meshStandardMaterial
           color={color}

@@ -4,6 +4,7 @@ import { KeyboardControls, Stars } from "@react-three/drei";
 import { Player } from "./Player";
 import { Portal } from "./Portal";
 import { Camera } from "./Camera";
+import { Wall } from "./Wall";
 import * as THREE from "three";
 
 const keyboardMap = [
@@ -73,6 +74,19 @@ const portals = [
   { position: [0, 2, 15] as [number, number, number], color: "#00d4ff", label: "I Seek", route: "/seek" },
 ];
 
+const walls = [
+  { position: [0, 3, -40] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], width: 100, height: 6, depth: 1 },
+  { position: [0, 3, 40] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], width: 100, height: 6, depth: 1 },
+  { position: [-40, 3, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], width: 80, height: 6, depth: 1 },
+  { position: [40, 3, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], width: 80, height: 6, depth: 1 },
+];
+
+const wallCollisions = walls.map(wall => ({
+  position: wall.position,
+  width: wall.rotation[1] === 0 ? wall.width : 1,
+  depth: wall.rotation[1] === 0 ? 1 : wall.width,
+}));
+
 function Scene() {
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, 0));
 
@@ -81,16 +95,31 @@ function Scene() {
       <Lights />
       <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
       <Ground />
-      <Player onPositionChange={setPlayerPosition} />
+      <Player 
+        onPositionChange={setPlayerPosition} 
+        portals={portals}
+        walls={wallCollisions}
+      />
       <Camera target={playerPosition} />
       
+      {/* Walls */}
+      {walls.map((wall, index) => (
+        <Wall
+          key={`wall-${index}`}
+          position={wall.position}
+          rotation={wall.rotation}
+          width={wall.width}
+          height={wall.height}
+        />
+      ))}
+      
+      {/* Portals */}
       {portals.map((portal, index) => (
         <Portal
-          key={index}
+          key={`portal-${index}`}
           position={portal.position}
           color={portal.color}
           label={portal.label}
-          route={portal.route}
         />
       ))}
     </>
@@ -122,7 +151,7 @@ export function Scene3D() {
         border: "1px solid #00ffff",
       }}>
         <div>🎮 Controls: WASD or Arrow Keys to move</div>
-        <div style={{ marginTop: "5px" }}>🚪 Click on portals to enter</div>
+        <div style={{ marginTop: "5px" }}>🚪 Get close to portals to enter</div>
       </div>
     </div>
   );

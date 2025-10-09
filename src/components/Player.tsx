@@ -1,16 +1,26 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls } from "@react-three/drei";
+import { useNavigate } from "react-router-dom";
 import * as THREE from "three";
+
+interface Portal {
+  position: [number, number, number];
+  route: string;
+}
 
 interface PlayerProps {
   onPositionChange?: (position: THREE.Vector3) => void;
+  portals: Portal[];
+  walls?: { position: [number, number, number]; width: number; depth: number }[];
 }
 
-export function Player({ onPositionChange }: PlayerProps) {
+export function Player({ onPositionChange, portals, walls = [] }: PlayerProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
+  const navigate = useNavigate();
+  const lastPortalCheck = useRef(0);
 
   // Get keyboard controls
   const forward = useKeyboardControls((state) => state.forward);
@@ -38,13 +48,54 @@ export function Player({ onPositionChange }: PlayerProps) {
       velocity.current.lerp(new THREE.Vector3(), 0.1);
     }
 
-    // Update position
-    meshRef.current.position.x += velocity.current.x * delta;
-    meshRef.current.position.z += velocity.current.z * delta;
+    // Calculate new position
+    const newX = meshRef.current.position.x + velocity.current.x * delta;
+    const newZ = meshRef.current.position.z + velocity.current.z * delta;
+
+    // Wall collision detection
+    let collided = false;
+    for (const wall of walls) {
+      const halfWidth = wall.width / 2;
+      const halfDepth = wall.depth / 2;
+      const buffer = 1; // Collision buffer
+
+      if (
+        newX > wall.position[0] - halfWidth - buffer &&
+        newX < wall.position[0] + halfWidth + buffer &&
+        newZ > wall.position[2] - halfDepth - buffer &&
+        newZ < wall.position[2] + halfDepth + buffer
+      ) {
+        collided = true;
+        break;
+      }
+    }
+
+    // Update position if no collision
+    if (!collided) {
+      meshRef.current.position.x = newX;
+      meshRef.current.position.z = newZ;
+    }
 
     // Rotate torus for visual effect
     meshRef.current.rotation.x += delta * 0.5;
     meshRef.current.rotation.y += delta * 0.3;
+
+    // Check portal collisions (with cooldown to prevent rapid navigation)
+    const currentTime = state.clock.elapsedTime;
+    if (currentTime - lastPortalCheck.current > 0.5) {
+      for (const portal of portals) {
+        const distance = meshRef.current.position.distanceTo(
+          new THREE.Vector3(portal.position[0], portal.position[1], portal.position[2])
+        );
+        
+        // If within 2 units of portal center, trigger navigation
+        if (distance < 2.5) {
+          lastPortalCheck.current = currentTime;
+          navigate(portal.route);
+          break;
+        }
+      }
+    }
 
     // Notify parent of position change
     if (onPositionChange) {
