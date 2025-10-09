@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useKeyboardControls } from "@react-three/drei";
+import { useKeyboardControls, useGLTF, useAnimations } from "@react-three/drei";
 import * as THREE from "three";
 
 interface Portal {
@@ -9,58 +9,87 @@ interface Portal {
   label: string;
 }
 
+interface Wall {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+}
+
 interface PlayerProps {
   onPositionChange?: (position: THREE.Vector3) => void;
   portals: Portal[];
-  walls?: { position: [number, number, number]; width: number; depth: number }[];
+  walls?: Wall[];
   onPortalProximity?: (portalName: string | null) => void;
   onPortalEnter?: (route: string, label: string) => void;
 }
 
-export function Player({ onPositionChange, portals, walls = [], onPortalProximity, onPortalEnter }: PlayerProps) {
-  const meshRef = useRef<THREE.Mesh>(null);
+export function Player({
+  onPositionChange,
+  portals,
+  walls = [],
+  onPortalProximity,
+  onPortalEnter,
+}: PlayerProps) {
+  const groupRef = useRef<THREE.Group>(null);
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
   const lastPortalCheck = useRef(0);
   const nearPortal = useRef<string | null>(null);
 
-  // Get keyboard controls
+  // Load character model + animations
+  const { scene, animations } = useGLTF("/models/character.glb");
+  const { actions } = useAnimations(animations, groupRef);
+
+  // Keyboard controls
   const forward = useKeyboardControls((state) => state.forward);
   const backward = useKeyboardControls((state) => state.backward);
   const left = useKeyboardControls((state) => state.left);
   const right = useKeyboardControls((state) => state.right);
 
-  useFrame((state, delta) => {
-    if (!meshRef.current) return;
+  // Handle animation switching
+  useEffect(() => {
+    if (!actions) return;
+    const moving = forward || backward || left || right;
+    let nextAction;
 
-    // Reset direction
-    direction.current.set(0, 0, 0);
+    if (moving) nextAction = actions["Walk"] || actions["Run"];
+    else nextAction = actions["Idle"];
+
+    if (nextAction) {
+      Object.values(actions).forEach((a) => a?.fadeOut(0.2));
+      nextAction.reset().fadeIn(0.2).play();
+    }
+  }, [forward, backward, left, right, actions]);
+
+  useFrame((state, delta) => {
+    if (!groupRef.current) return;
 
     // Calculate movement direction
+    direction.current.set(0, 0, 0);
     if (forward) direction.current.z -= 1;
     if (backward) direction.current.z += 1;
     if (left) direction.current.x -= 1;
     if (right) direction.current.x += 1;
 
-    // Normalize and apply speed
+    // Apply smooth velocity
+    const speed = direction.current.length() > 0 ? 5 : 0;
     if (direction.current.length() > 0) {
       direction.current.normalize();
-      velocity.current.lerp(direction.current.multiplyScalar(5), 0.1);
+      velocity.current.lerp(direction.current.multiplyScalar(speed), 0.1);
     } else {
       velocity.current.lerp(new THREE.Vector3(), 0.1);
     }
 
-    // Calculate new position
-    const newX = meshRef.current.position.x + velocity.current.x * delta;
-    const newZ = meshRef.current.position.z + velocity.current.z * delta;
+    // Predict new position
+    const newX = groupRef.current.position.x + velocity.current.x * delta;
+    const newZ = groupRef.current.position.z + velocity.current.z * delta;
 
-    // Wall collision detection
+    // Wall collision
     let collided = false;
     for (const wall of walls) {
       const halfWidth = wall.width / 2;
       const halfDepth = wall.depth / 2;
-      const buffer = 1; // Collision buffer
-
+      const buffer = 1;
       if (
         newX > wall.position[0] - halfWidth - buffer &&
         newX < wall.position[0] + halfWidth + buffer &&
@@ -72,33 +101,32 @@ export function Player({ onPositionChange, portals, walls = [], onPortalProximit
       }
     }
 
-    // Update position if no collision
     if (!collided) {
-      meshRef.current.position.x = newX;
-      meshRef.current.position.z = newZ;
+      groupRef.current.position.x = newX;
+      groupRef.current.position.z = newZ;
     }
 
-    // Rotate torus for visual effect
-    meshRef.current.rotation.x += delta * 0.5;
-    meshRef.current.rotation.y += delta * 0.3;
+    // Smooth character rotation
+    if (direction.current.lengthSq() > 0) {
+      const angle = Math.atan2(direction.current.x, direction.current.z);
+      groupRef.current.rotation.y = THREE.MathUtils.lerp(
+        groupRef.current.rotation.y,
+        angle,
+        0.2
+      );
+    }
 
-    // Check portal proximity and collisions
+    // Portal proximity & entry
     const currentTime = state.clock.elapsedTime;
     let closestPortal: string | null = null;
     let shouldEnter = false;
     let enterPortal: Portal | null = null;
 
     for (const portal of portals) {
-      const distance = meshRef.current.position.distanceTo(
-        new THREE.Vector3(portal.position[0], portal.position[1], portal.position[2])
+      const distance = groupRef.current.position.distanceTo(
+        new THREE.Vector3(...portal.position)
       );
-      
-      // Show proximity indicator when within 5 units
-      if (distance < 5 && !closestPortal) {
-        closestPortal = portal.label;
-      }
-
-      // Enter portal when within 2.5 units (with cooldown)
+      if (distance < 5 && !closestPortal) closestPortal = portal.label;
       if (distance < 2.5 && currentTime - lastPortalCheck.current > 1.5) {
         shouldEnter = true;
         enterPortal = portal;
@@ -107,35 +135,33 @@ export function Player({ onPositionChange, portals, walls = [], onPortalProximit
       }
     }
 
-    // Update proximity indicator
     if (closestPortal !== nearPortal.current) {
       nearPortal.current = closestPortal;
-      if (onPortalProximity) {
-        onPortalProximity(closestPortal);
-      }
+      onPortalProximity?.(closestPortal);
     }
 
-    // Trigger portal entry with delay
     if (shouldEnter && enterPortal && onPortalEnter) {
       onPortalEnter(enterPortal.route, enterPortal.label);
     }
 
-    // Notify parent of position change
-    if (onPositionChange) {
-      onPositionChange(meshRef.current.position);
-    }
+    // Notify parent of position
+    onPositionChange?.(groupRef.current.position);
+
+    // Smooth third-person camera follow
+    const cameraOffset = new THREE.Vector3(0, 3, 6);
+    const cameraTarget = groupRef.current.position
+      .clone()
+      .add(cameraOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), groupRef.current.rotation.y));
+
+    state.camera.position.lerp(cameraTarget, 0.05);
+    state.camera.lookAt(groupRef.current.position);
   });
 
   return (
-    <mesh ref={meshRef} position={[0, 1, 0]} castShadow>
-      <torusGeometry args={[0.5, 0.2, 16, 32]} />
-      <meshStandardMaterial
-        color="#00ffff"
-        emissive="#00ffff"
-        emissiveIntensity={0.5}
-        metalness={0.8}
-        roughness={0.2}
-      />
-    </mesh>
+    <group ref={groupRef} position={[0, 0, 0]} dispose={null}>
+      <primitive object={scene} scale={1.0} />
+    </group>
   );
 }
+
+useGLTF.preload("/models/character.glb");
