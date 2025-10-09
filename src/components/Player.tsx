@@ -164,4 +164,4 @@ export function Player({
   );
 }
 
-useGLTF.preload("/models/character.glb");
+useGLTF.preload("https://jqmapu5497.ufs.sh/f/86WEsYzUhV0NYnB7tJPFvmtf0nsaREkx1yPSNdU3V4igpuDw");
