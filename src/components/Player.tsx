@@ -1,26 +1,28 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls } from "@react-three/drei";
-import { useNavigate } from "react-router-dom";
 import * as THREE from "three";
 
 interface Portal {
   position: [number, number, number];
   route: string;
+  label: string;
 }
 
 interface PlayerProps {
   onPositionChange?: (position: THREE.Vector3) => void;
   portals: Portal[];
   walls?: { position: [number, number, number]; width: number; depth: number }[];
+  onPortalProximity?: (portalName: string | null) => void;
+  onPortalEnter?: (route: string, label: string) => void;
 }
 
-export function Player({ onPositionChange, portals, walls = [] }: PlayerProps) {
+export function Player({ onPositionChange, portals, walls = [], onPortalProximity, onPortalEnter }: PlayerProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
-  const navigate = useNavigate();
   const lastPortalCheck = useRef(0);
+  const nearPortal = useRef<string | null>(null);
 
   // Get keyboard controls
   const forward = useKeyboardControls((state) => state.forward);
@@ -80,21 +82,42 @@ export function Player({ onPositionChange, portals, walls = [] }: PlayerProps) {
     meshRef.current.rotation.x += delta * 0.5;
     meshRef.current.rotation.y += delta * 0.3;
 
-    // Check portal collisions (with cooldown to prevent rapid navigation)
+    // Check portal proximity and collisions
     const currentTime = state.clock.elapsedTime;
-    if (currentTime - lastPortalCheck.current > 0.5) {
-      for (const portal of portals) {
-        const distance = meshRef.current.position.distanceTo(
-          new THREE.Vector3(portal.position[0], portal.position[1], portal.position[2])
-        );
-        
-        // If within 2 units of portal center, trigger navigation
-        if (distance < 2.5) {
-          lastPortalCheck.current = currentTime;
-          navigate(portal.route);
-          break;
-        }
+    let closestPortal: string | null = null;
+    let shouldEnter = false;
+    let enterPortal: Portal | null = null;
+
+    for (const portal of portals) {
+      const distance = meshRef.current.position.distanceTo(
+        new THREE.Vector3(portal.position[0], portal.position[1], portal.position[2])
+      );
+      
+      // Show proximity indicator when within 5 units
+      if (distance < 5 && !closestPortal) {
+        closestPortal = portal.label;
       }
+
+      // Enter portal when within 2.5 units (with cooldown)
+      if (distance < 2.5 && currentTime - lastPortalCheck.current > 1.5) {
+        shouldEnter = true;
+        enterPortal = portal;
+        lastPortalCheck.current = currentTime;
+        break;
+      }
+    }
+
+    // Update proximity indicator
+    if (closestPortal !== nearPortal.current) {
+      nearPortal.current = closestPortal;
+      if (onPortalProximity) {
+        onPortalProximity(closestPortal);
+      }
+    }
+
+    // Trigger portal entry with delay
+    if (shouldEnter && enterPortal && onPortalEnter) {
+      onPortalEnter(enterPortal.route, enterPortal.label);
     }
 
     // Notify parent of position change

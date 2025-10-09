@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { KeyboardControls, Stars } from "@react-three/drei";
+import { useNavigate } from "react-router-dom";
 import { Player } from "./Player";
 import { Portal } from "./Portal";
 import { Camera } from "./Camera";
 import { Wall } from "./Wall";
+import { PortalTransition } from "./PortalTransition";
 import * as THREE from "three";
 
 const keyboardMap = [
@@ -87,7 +89,7 @@ const wallCollisions = walls.map(wall => ({
   depth: wall.rotation[1] === 0 ? 1 : wall.width,
 }));
 
-function Scene() {
+function Scene({ onPortalProximity, onPortalEnter }: { onPortalProximity: (name: string | null) => void; onPortalEnter: (route: string, label: string) => void }) {
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, 0));
 
   return (
@@ -99,6 +101,8 @@ function Scene() {
         onPositionChange={setPlayerPosition} 
         portals={portals}
         walls={wallCollisions}
+        onPortalProximity={onPortalProximity}
+        onPortalEnter={onPortalEnter}
       />
       <Camera target={playerPosition} />
       
@@ -127,32 +131,96 @@ function Scene() {
 }
 
 export function Scene3D() {
+  const navigate = useNavigate();
+  const [nearPortal, setNearPortal] = useState<string | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitioningPortal, setTransitioningPortal] = useState("");
+
+  const handlePortalEnter = (route: string, label: string) => {
+    setIsTransitioning(true);
+    setTransitioningPortal(label);
+    
+    // Delay navigation for smooth transition
+    setTimeout(() => {
+      navigate(route);
+      setIsTransitioning(false);
+      setTransitioningPortal("");
+    }, 1500);
+  };
+
   return (
     <div style={{ width: "100vw", height: "100vh", position: "fixed", top: 0, left: 0 }}>
       <KeyboardControls map={keyboardMap}>
         <Canvas shadows camera={{ position: [0, 5, 10], fov: 75 }}>
-          <Scene />
+          <Scene onPortalProximity={setNearPortal} onPortalEnter={handlePortalEnter} />
         </Canvas>
       </KeyboardControls>
+
+      {/* Portal proximity indicator */}
+      {nearPortal && !isTransitioning && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "rgba(0, 0, 0, 0.8)",
+            border: "2px solid #00ffff",
+            borderRadius: "15px",
+            padding: "20px 40px",
+            color: "#00ffff",
+            fontSize: "1.5rem",
+            fontWeight: "bold",
+            textAlign: "center",
+            zIndex: 100,
+            boxShadow: "0 0 30px rgba(0, 212, 255, 0.5)",
+            animation: "pulse 2s ease-in-out infinite",
+          }}
+        >
+          <div style={{ marginBottom: "8px" }}>🚪 {nearPortal}</div>
+          <div style={{ fontSize: "1rem", opacity: 0.8, fontWeight: "normal" }}>
+            Move closer to enter
+          </div>
+        </div>
+      )}
+
+      {/* Transition overlay */}
+      <PortalTransition isTransitioning={isTransitioning} portalName={transitioningPortal} />
       
       {/* Controls overlay */}
-      <div style={{
-        position: "absolute",
-        bottom: "20px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        color: "#00ffff",
-        fontFamily: "monospace",
-        fontSize: "14px",
-        textAlign: "center",
-        background: "rgba(0, 0, 0, 0.7)",
-        padding: "15px 25px",
-        borderRadius: "10px",
-        border: "1px solid #00ffff",
-      }}>
+      <div
+        style={{
+          position: "absolute",
+          bottom: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          color: "#00ffff",
+          fontFamily: "monospace",
+          fontSize: "14px",
+          textAlign: "center",
+          background: "rgba(0, 0, 0, 0.7)",
+          padding: "15px 25px",
+          borderRadius: "10px",
+          border: "1px solid #00ffff",
+          zIndex: 10,
+        }}
+      >
         <div>🎮 Controls: WASD or Arrow Keys to move</div>
         <div style={{ marginTop: "5px" }}>🚪 Get close to portals to enter</div>
       </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(1.05);
+            opacity: 0.9;
+          }
+        }
+      `}</style>
     </div>
   );
 }
