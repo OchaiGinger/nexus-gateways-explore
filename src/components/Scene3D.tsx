@@ -1,12 +1,9 @@
-import { useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useState } from "react";
+import { Canvas } from "@react-three/fiber";
 import { KeyboardControls, Stars } from "@react-three/drei";
 import { useNavigate } from "react-router-dom";
-import { Player } from "./Player";
-import { Portal } from "./Portal";
-import { Wall } from "./Wall";
-import { PortalTransition } from "./PortalTransition";
 import * as THREE from "three";
+import { Player } from "./Player";
 
 const keyboardMap = [
   { name: "forward", keys: ["ArrowUp", "KeyW"] },
@@ -17,21 +14,19 @@ const keyboardMap = [
 
 function Ground() {
   return (
-    <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#0a0a1f" roughness={0.8} metalness={0.2} />
-      </mesh>
-    </>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[200, 200]} />
+      <meshStandardMaterial color="#0a0a1f" roughness={0.8} metalness={0.2} />
+    </mesh>
   );
 }
 
 function Lights() {
   return (
     <>
-      <ambientLight intensity={0.3} />
-      <directionalLight position={[10, 20, 10]} intensity={1.5} castShadow />
-      <pointLight position={[0, 10, 0]} intensity={0.5} color="#00ffff" />
+      <ambientLight intensity={1.5} />
+      <directionalLight position={[5, 10, 5]} intensity={2} castShadow />
+      <pointLight position={[0, 10, 0]} intensity={1.2} color="#00ffff" />
     </>
   );
 }
@@ -42,7 +37,11 @@ export function Scene3D() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitioningPortal, setTransitioningPortal] = useState("");
   const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1, 0));
-  const [playerRot, setPlayerRot] = useState(new THREE.Euler(0, 0, 0));
+
+  const portals = [
+    { position: [10, 0, 0] as [number, number, number], route: "/about", label: "About" },
+    { position: [-10, 0, 0] as [number, number, number], route: "/shop", label: "Shop" },
+  ];
 
   const handlePortalEnter = (route: string, label: string) => {
     setIsTransitioning(true);
@@ -57,22 +56,21 @@ export function Scene3D() {
   return (
     <div style={{ width: "100vw", height: "100vh", position: "fixed" }}>
       <KeyboardControls map={keyboardMap}>
-        <Canvas shadows camera={{ position: [0, 5, 10], fov: 75 }}>
+        <Canvas shadows camera={{ position: [0, 3, 10], fov: 60 }}>
+          <color attach="background" args={["#000010"]} />
           <Lights />
           <Stars radius={100} depth={50} count={5000} factor={4} fade />
           <Ground />
-         <Player 
-  onPositionChange={setPlayerPosition}
-  portals={portals}
-  walls={wallCollisions}
-  onPortalProximity={onPortalProximity}
-  onPortalEnter={onPortalEnter}
-/>
-          
+          <Player
+            onPositionChange={setPlayerPos}
+            portals={portals}
+            onPortalProximity={setNearPortal}
+            onPortalEnter={handlePortalEnter}
+          />
         </Canvas>
       </KeyboardControls>
 
-      {/* UI overlays remain the same */}
+      {/* ✅ Portal proximity indicator */}
       {nearPortal && !isTransitioning && (
         <div
           style={{
@@ -94,11 +92,7 @@ export function Scene3D() {
           🚪 {nearPortal}
         </div>
       )}
-
-      <PortalTransition
-        isTransitioning={isTransitioning}
-        portalName={transitioningPortal}
-      />
     </div>
   );
 }
+
