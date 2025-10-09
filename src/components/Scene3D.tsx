@@ -1,6 +1,6 @@
 "use client";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { OrbitControls, KeyboardControls, Html } from "@react-three/drei";
+import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import { Suspense, useRef, useEffect } from "react";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
@@ -14,11 +14,8 @@ function Player() {
   const left = useRef(false);
   const right = useRef(false);
 
-  // 🧍 Load Mixamo model
-  const gltf = useLoader(
-    GLTFLoader,
-    "https://jqmapu5497.ufs.sh/f/86WEsYzUhV0NYnB7tJPFvmtf0nsaREkx1yPSNdU3V4igpuDw"
-  );
+  // ✅ Load locally stored Mixamo character
+  const gltf = useLoader(GLTFLoader, "/models/character.glb");
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -41,11 +38,10 @@ function Player() {
     };
   }, []);
 
-  // 🧠 Add model to group once loaded
   useEffect(() => {
     if (gltf && groupRef.current) {
-      gltf.scene.scale.set(1.2, 1.2, 1.2);
-      gltf.scene.position.set(0, 0, 0);
+      gltf.scene.scale.set(0.01, 0.01, 0.01); // adjust if needed
+      gltf.scene.position.set(0, 1, 0);
       groupRef.current.add(gltf.scene);
     }
   }, [gltf]);
@@ -77,7 +73,6 @@ function Player() {
     groupRef.current.position.x += velocity.current.x * delta;
     groupRef.current.position.z += velocity.current.z * delta;
 
-    // 🎥 Smooth follow camera
     const camOffset = new THREE.Vector3(0, 3, 6);
     const rotatedOffset = camOffset.clone().applyAxisAngle(
       new THREE.Vector3(0, 1, 0),
@@ -94,31 +89,29 @@ function Player() {
 function Scene() {
   return (
     <>
-      {/* ☀️ Lights */}
-      <ambientLight intensity={1.2} />
-      <directionalLight position={[10, 10, 5]} intensity={2} castShadow />
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[10, 10, 5]} intensity={1.2} castShadow />
       <hemisphereLight intensity={0.6} />
 
-      {/* 🧍 Player */}
-      <Suspense fallback={<Html center>Loading character...</Html>}>
+      <Suspense fallback={<Html center>Loading Character...</Html>}>
         <Player />
       </Suspense>
 
-      {/* 🟩 Ground */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[100, 100]} />
         <meshStandardMaterial color="#5f8260" />
       </mesh>
 
-      <OrbitControls enablePan={false} />
+      <OrbitControls />
     </>
   );
 }
 
-export default function App() {
+export function Scene3D() {
   return (
     <Canvas shadows camera={{ position: [0, 3, 10], fov: 55 }}>
       <Scene />
     </Canvas>
   );
 }
+
