@@ -31,23 +31,26 @@ export function Player({
   const lastPortalCheck = useRef(0);
   const nearPortal = useRef<string | null>(null);
 
+  // ✅ Keyboard controls
   const forward = useKeyboardControls((state) => state.forward);
   const backward = useKeyboardControls((state) => state.backward);
   const left = useKeyboardControls((state) => state.left);
   const right = useKeyboardControls((state) => state.right);
 
-  // 🔹 Load Mixamo Character (replace with your UploadThing link)
+  // ✅ Load Mixamo model (your UploadThing link)
   const gltf = useLoader(
     GLTFLoader,
     "https://jqmapu5497.ufs.sh/f/86WEsYzUhV0NYnB7tJPFvmtf0nsaREkx1yPSNdU3V4igpuDw"
   );
 
-  // Adjust character scale/orientation once loaded
+  // ✅ Setup model (scale/orientation)
   useEffect(() => {
     if (gltf && groupRef.current) {
-      gltf.scene.scale.set(1.5, 1.5, 1.5);
-      gltf.scene.position.set(0, 0, 0);
-      groupRef.current.add(gltf.scene);
+      const model = gltf.scene;
+      model.scale.set(0.02, 0.02, 0.02); // Adjust size if needed
+      model.position.set(0, 0, 0);
+      model.rotation.y = Math.PI; // Face forward
+      groupRef.current.add(model);
     }
   }, [gltf]);
 
@@ -60,13 +63,12 @@ export function Player({
     if (left) direction.current.x -= 1;
     if (right) direction.current.x += 1;
 
-    // Movement speed and damping
     const speed = 8;
     if (direction.current.length() > 0) {
       direction.current.normalize();
       velocity.current.lerp(direction.current.multiplyScalar(speed), 0.15);
 
-      // 🔹 Rotate player to face movement direction
+      // Rotate to face movement direction
       const targetAngle = Math.atan2(direction.current.x, direction.current.z);
       groupRef.current.rotation.y = THREE.MathUtils.lerpAngle(
         groupRef.current.rotation.y,
@@ -77,10 +79,11 @@ export function Player({
       velocity.current.lerp(new THREE.Vector3(), 0.1);
     }
 
+    // Calculate next position
     const newX = groupRef.current.position.x + velocity.current.x * delta;
     const newZ = groupRef.current.position.z + velocity.current.z * delta;
 
-    // Wall collision check
+    // ✅ Wall collision detection
     let collided = false;
     for (const wall of walls) {
       const halfW = wall.width / 2;
@@ -102,7 +105,7 @@ export function Player({
       groupRef.current.position.z = newZ;
     }
 
-    // 🔹 COD-style camera follow
+    // ✅ Third-person camera follow
     const camOffset = new THREE.Vector3(0, 3, 6);
     const rotatedOffset = camOffset.clone().applyAxisAngle(
       new THREE.Vector3(0, 1, 0),
@@ -113,7 +116,7 @@ export function Player({
     state.camera.position.lerp(camPos, 0.1);
     state.camera.lookAt(groupRef.current.position);
 
-    // 🔹 Portals proximity + entry
+    // ✅ Portal proximity and enter logic
     const currentTime = state.clock.elapsedTime;
     let closestPortal: string | null = null;
     let shouldEnter = false;
@@ -146,4 +149,3 @@ export function Player({
 
   return <group ref={groupRef} position={[0, 0, 0]} />;
 }
-
