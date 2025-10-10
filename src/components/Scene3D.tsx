@@ -212,5 +212,11 @@ export function Scene3D() {
             opacity: 1;
           }
           50% {
-            transfor
-
+            transform: translate(-50%, -50%) scale(1.05);
+            opacity: 0.9;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
