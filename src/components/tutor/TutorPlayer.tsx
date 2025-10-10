@@ -16,7 +16,7 @@ export function TutorPlayer({
   cameraRotation = 0,
   onDoorProximity,
   doors,
-  isFPS = true
+  isFPS = true,
 }: TutorPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const [model, setModel] = useState<THREE.Group | null>(null);
@@ -24,7 +24,6 @@ export function TutorPlayer({
   const isMoving = useRef(false);
   const nearDoor = useRef<number | null>(null);
 
-  // Load the GLTF character model
   const { scene } = useGLTF("/models/character.glb");
 
   useEffect(() => {
@@ -46,7 +45,7 @@ export function TutorPlayer({
     forward: false,
     backward: false,
     left: false,
-    right: false
+    right: false,
   });
 
   useEffect(() => {
@@ -55,7 +54,7 @@ export function TutorPlayer({
         forward: state.forward,
         backward: state.backward,
         left: state.left,
-        right: state.right
+        right: state.right,
       };
     });
   }, [sub]);
@@ -89,18 +88,18 @@ export function TutorPlayer({
     groupRef.current.position.x += velocity.current.x * delta;
     groupRef.current.position.z += velocity.current.z * delta;
 
-    // Boundary
+    // Boundaries
     groupRef.current.position.x = Math.max(-8, Math.min(8, groupRef.current.position.x));
     groupRef.current.position.z = Math.max(-28, Math.min(28, groupRef.current.position.z));
 
-    // Camera attaches to head for FPS
+    // Camera (FPS)
     if (isFPS) {
       state.camera.position.copy(groupRef.current.position);
       state.camera.position.y += 1.6;
       state.camera.rotation.y = cameraRotation;
     }
 
-    // Door proximity
+    // Door detection
     let closestDoor: number | null = null;
     let minDist = Infinity;
     doors.forEach((door, i) => {
@@ -128,5 +127,6 @@ export function TutorPlayer({
 }
 
 useGLTF.preload("/models/character.glb");
+
 
 
