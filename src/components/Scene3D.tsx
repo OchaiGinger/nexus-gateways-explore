@@ -91,6 +91,7 @@ const wallCollisions = walls.map(wall => ({
 
 function Scene({ onPortalProximity, onPortalEnter }: { onPortalProximity: (name: string | null) => void; onPortalEnter: (route: string, label: string) => void }) {
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, 0));
+  const [cameraRotation, setCameraRotation] = useState(0);
 
   return (
     <>
@@ -103,8 +104,9 @@ function Scene({ onPortalProximity, onPortalEnter }: { onPortalProximity: (name:
         walls={wallCollisions}
         onPortalProximity={onPortalProximity}
         onPortalEnter={onPortalEnter}
+        cameraRotation={cameraRotation}
       />
-      <Camera target={playerPosition} />
+      <Camera target={playerPosition} onCameraRotation={setCameraRotation} />
       
       {/* Walls */}
       {walls.map((wall, index) => (
@@ -205,7 +207,7 @@ export function Scene3D() {
           zIndex: 10,
         }}
       >
-        <div>🎮 Controls: WASD or Arrow Keys to move</div>
+        <div>🎮 WASD/Arrows: Move | 🖱️ Mouse: Rotate Camera</div>
         <div style={{ marginTop: "5px" }}>🚪 Get close to portals to enter</div>
       </div>
 

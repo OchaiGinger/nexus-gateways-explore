@@ -15,9 +15,10 @@ interface PlayerProps {
   walls?: { position: [number, number, number]; width: number; depth: number }[];
   onPortalProximity?: (portalName: string | null) => void;
   onPortalEnter?: (route: string, label: string) => void;
+  cameraRotation?: number;
 }
 
-export function Player({ onPositionChange, portals, walls = [], onPortalProximity, onPortalEnter }: PlayerProps) {
+export function Player({ onPositionChange, portals, walls = [], onPortalProximity, onPortalEnter, cameraRotation = 0 }: PlayerProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
@@ -36,15 +37,25 @@ export function Player({ onPositionChange, portals, walls = [], onPortalProximit
     // Reset direction
     direction.current.set(0, 0, 0);
 
-    // Calculate movement direction
-    if (forward) direction.current.z -= 1;
-    if (backward) direction.current.z += 1;
-    if (left) direction.current.x -= 1;
-    if (right) direction.current.x += 1;
+    // Calculate movement direction relative to camera
+    const moveDirection = new THREE.Vector3();
+    if (forward) moveDirection.z -= 1;
+    if (backward) moveDirection.z += 1;
+    if (left) moveDirection.x -= 1;
+    if (right) moveDirection.x += 1;
 
-    // Normalize and apply speed
-    if (direction.current.length() > 0) {
-      direction.current.normalize();
+    // Apply camera rotation to movement direction
+    if (moveDirection.length() > 0) {
+      moveDirection.normalize();
+      
+      // Rotate movement based on camera angle
+      const rotatedDirection = new THREE.Vector3(
+        moveDirection.x * Math.cos(cameraRotation) - moveDirection.z * Math.sin(cameraRotation),
+        0,
+        moveDirection.x * Math.sin(cameraRotation) + moveDirection.z * Math.cos(cameraRotation)
+      );
+      
+      direction.current.copy(rotatedDirection);
       velocity.current.lerp(direction.current.multiplyScalar(5), 0.1);
     } else {
       velocity.current.lerp(new THREE.Vector3(), 0.1);
