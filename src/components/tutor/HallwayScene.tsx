@@ -1,8 +1,9 @@
+"use client";
+
 import { useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { KeyboardControls, Stars, Environment } from "@react-three/drei";
+import { KeyboardControls, Environment, Stars } from "@react-three/drei";
 import * as THREE from "three";
-import { Camera } from "../Camera";
 import { TutorPlayer } from "./TutorPlayer";
 import { Door } from "./Door";
 
@@ -39,13 +40,11 @@ function HospitalHallway() {
         <meshStandardMaterial color="#f5f5f5" roughness={1} />
       </mesh>
 
-      {/* Left Wall */}
+      {/* Left & Right Walls */}
       <mesh position={[-10, 5, 0]}>
         <boxGeometry args={[0.3, 10, 60]} />
         <meshStandardMaterial color="#e0e0e0" />
       </mesh>
-
-      {/* Right Wall */}
       <mesh position={[10, 5, 0]}>
         <boxGeometry args={[0.3, 10, 60]} />
         <meshStandardMaterial color="#e0e0e0" />
@@ -61,31 +60,31 @@ function HospitalHallway() {
         />
       ))}
 
-      {/* Lights */}
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 20, 5]} intensity={0.6} castShadow />
-      <Environment preset="apartment" />
+      {/* Lighting */}
+      <ambientLight intensity={0.8} />
+      <directionalLight position={[10, 20, 10]} intensity={1.2} castShadow />
+      <Environment preset="city" />
     </group>
   );
 }
 
 export function HallwayScene() {
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, 20));
-  const [cameraRotation, setCameraRotation] = useState(0);
 
   return (
     <div style={{ width: "100vw", height: "100vh", position: "fixed", top: 0, left: 0 }}>
       <KeyboardControls map={keyboardMap}>
-        <Canvas shadows camera={{ position: [0, 2, 5], fov: 75 }}>
-          <Stars radius={100} depth={50} count={3000} factor={4} saturation={0} fade speed={1} />
+        <Canvas shadows camera={{ fov: 75, position: [0, 2, 5] }}>
+          <Stars radius={80} depth={20} count={3000} factor={4} fade speed={1} />
           <HospitalHallway />
           <TutorPlayer
-            modelUrl="/models/character.glb" // <-- use your hospital staff/player model
+            modelUrl="/models/character.glb"
             onPositionChange={setPlayerPosition}
+            doors={rooms}
           />
-          <Camera target={playerPosition} onCameraRotation={setCameraRotation} />
         </Canvas>
       </KeyboardControls>
     </div>
   );
 }
+
