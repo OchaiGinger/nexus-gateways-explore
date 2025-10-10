@@ -4,11 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text, Stars } from "@react-three/drei";
 
 /**
- * Updated HallwayScene with:
- * 1. Open gap to L-section (no wall)
- * 2. Doors properly facing player
- * 3. No zoom controls
- * 4. Red foot marker showing direction
+ * Updated HallwayScene with visible player body and marker in FPS view
  */
 
 // -----------------------------
@@ -45,7 +41,7 @@ const DOOR_WIDTH = 1.8;
 const DOOR_HEIGHT = 2.4;
 
 // -----------------------------
-// Updated Door component - Now properly facing player
+// Updated Door component
 // -----------------------------
 
 function Door({
@@ -134,21 +130,88 @@ function Door({
 }
 
 // -----------------------------
-// Player Direction Marker
+// Enhanced Player Direction Marker - Now visible in FPS
 // -----------------------------
 
 function PlayerDirectionMarker({ position, rotation }: { position: THREE.Vector3; rotation: number }) {
+  const markerRef = useRef<THREE.Group>(null);
+  
+  useFrame((state) => {
+    if (markerRef.current) {
+      // Add a subtle pulsing animation
+      const scale = 1 + Math.sin(state.clock.elapsedTime * 5) * 0.1;
+      markerRef.current.scale.set(scale, scale, scale);
+    }
+  });
+
   return (
-    <group position={[position.x, 0.02, position.z]} rotation={[0, rotation, 0]}>
-      {/* Red arrow pointing in player's direction */}
+    <group ref={markerRef} position={[position.x, 0.02, position.z]} rotation={[0, rotation, 0]}>
+      {/* Large red circle on floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.2, 0.3, 16]} />
-        <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.5} />
+        <circleGeometry args={[0.4, 16]} />
+        <meshStandardMaterial 
+          color="#ff0000" 
+          emissive="#ff0000" 
+          emissiveIntensity={0.8}
+          transparent
+          opacity={0.7}
+        />
       </mesh>
-      <mesh position={[0, 0.01, -0.25]} rotation={[-Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.1, 0.4, 8]} />
-        <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.5} />
+      
+      {/* Red arrow pointing in player's direction */}
+      <mesh position={[0, 0.01, -0.4]} rotation={[-Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.15, 0.6, 8]} />
+        <meshStandardMaterial 
+          color="#ff0000" 
+          emissive="#ff0000" 
+          emissiveIntensity={1.0}
+        />
       </mesh>
+      
+      {/* Outer glow ring */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.45, 0.6, 32]} />
+        <meshStandardMaterial 
+          color="#ff0000" 
+          emissive="#ff0000" 
+          emissiveIntensity={0.5}
+          transparent
+          opacity={0.4}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+// -----------------------------
+// FPS Player Body - Visible parts in first person
+// -----------------------------
+
+function FPSPlayerBody({ position, rotation }: { position: THREE.Vector3; rotation: number }) {
+  return (
+    <group position={[position.x, 0, position.z]} rotation={[0, rotation, 0]}>
+      {/* Player body/feet - visible in FPS when looking down */}
+      <group position={[0, 0.8, 0]}>
+        {/* Shoes/feet */}
+        <mesh position={[0.1, -0.7, 0.1]} castShadow>
+          <boxGeometry args={[0.2, 0.1, 0.3]} />
+          <meshStandardMaterial color="#333333" />
+        </mesh>
+        <mesh position={[-0.1, -0.7, 0.1]} castShadow>
+          <boxGeometry args={[0.2, 0.1, 0.3]} />
+          <meshStandardMaterial color="#333333" />
+        </mesh>
+        
+        {/* Lower legs */}
+        <mesh position={[0.1, -0.5, 0]} castShadow>
+          <cylinderGeometry args={[0.05, 0.05, 0.4, 8]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
+        <mesh position={[-0.1, -0.5, 0]} castShadow>
+          <cylinderGeometry args={[0.05, 0.05, 0.4, 8]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -191,9 +254,6 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         <boxGeometry args={[0.5, 10, 60]} />
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
-
-      {/* REMOVED: inner partition wall between main corridor and branch */}
-      {/* This creates the open gap to the L-section */}
 
       {/* Branch walls */}
       <mesh position={[19.75, 5, -20]} receiveShadow castShadow>
@@ -313,13 +373,16 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         </Text>
       </group>
 
-      {/* Doors - Now properly positioned to face the player in the hallway */}
+      {/* Doors */}
       {doorWorldInfos.map((d) => (
         <Door key={d.index} info={d} onClick={onDoorClick} hovered={nearDoorIndex === d.index} />
       ))}
 
-      {/* Player direction marker */}
+      {/* Enhanced Player Direction Marker - Now much more visible */}
       <PlayerDirectionMarker position={playerPos} rotation={playerRotation} />
+      
+      {/* FPS Player Body - Visible when looking down */}
+      <FPSPlayerBody position={playerPos} rotation={playerRotation} />
 
       {/* Enhanced lighting setup */}
       <ambientLight intensity={1.0} color="#ffffff" />
@@ -352,7 +415,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
 }
 
 // -----------------------------
-// Updated TutorPlayer (FPS) - No zoom controls
+// Updated TutorPlayer (FPS) - With visible body parts
 // -----------------------------
 
 function TutorPlayer({
@@ -562,7 +625,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       top: 0, 
       left: 0,
       background: "#000000",
-      cursor: "grab" // Normal cursor instead of crosshair
+      cursor: "grab"
     }}>
       <Canvas 
         shadows 
@@ -588,8 +651,6 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           onRotationChange={(rotation) => setPlayerRotation(rotation)}
           speed={6}
         />
-
-        {/* REMOVED: OrbitControls to prevent zooming out */}
       </Canvas>
 
       {/* Bright HUD overlay */}
@@ -669,7 +730,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       >
         <div>🖱️ Click + Drag to look • 🎮 WASD to move • 🚪 Look at doors to interact</div>
         <div style={{ marginTop: "5px", fontSize: "12px" }}>
-          🔴 Red marker shows your position and direction
+          🔴 Look down to see your position marker and feet
         </div>
       </div>
 
@@ -694,7 +755,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
         <div>📍 10 Classrooms</div>
         <div>🎯 L-Shaped Layout</div>
         <div style={{ marginTop: "5px", color: "#ff0000", fontSize: "12px" }}>
-          🔺 Red marker = Your position
+          🔺 Look down to see position marker
         </div>
       </div>
     </div>
