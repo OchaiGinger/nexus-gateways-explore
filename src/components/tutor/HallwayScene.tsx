@@ -4,11 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text, Stars } from "@react-three/drei";
 
 /**
- * Fixed HallwayScene with:
- * 1. Properly aligned door labels
- * 2. Complete walls (start, end, L-wing)
- * 3. Fixed camera controls
- * 4. Enhanced door designs with colors
+ * Fixed HallwayScene with proper isMouseDown state
  */
 
 // -----------------------------
@@ -517,28 +513,29 @@ function TutorPlayer({
   onPositionChange,
   onDoorProximity,
   onRotationChange,
+  onMouseDownChange,
   speed = 3,
 }: {
   doors: { position: [number, number, number] }[];
   onPositionChange: (p: THREE.Vector3) => void;
   onDoorProximity: (index: number | null) => void;
   onRotationChange: (rotation: number) => void;
+  onMouseDownChange: (isDown: boolean) => void;
   speed?: number;
 }) {
   const { camera } = useThree();
   
   const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
-  const [isMouseDown, setIsMouseDown] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
   const keyState = useRef({ forward: false, backward: false, left: false, right: false });
   
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isMouseDown) return;
+      if (!document.pointerLockElement) return;
       
-      const movementX = e.movementX || (e.clientX - lastMousePos.x);
-      const movementY = e.movementY || (e.clientY - lastMousePos.y);
+      const movementX = e.movementX || 0;
+      const movementY = e.movementY || 0;
 
       const newRotation = {
         y: cameraRotation.y - movementX * 0.002,
@@ -547,30 +544,40 @@ function TutorPlayer({
 
       setCameraRotation(newRotation);
       onRotationChange(newRotation.y);
-      setLastMousePos({ x: e.clientX, y: e.clientY });
     };
 
     const handleMouseDown = (e: MouseEvent) => {
       if (e.button === 0) {
-        setIsMouseDown(true);
-        setLastMousePos({ x: e.clientX, y: e.clientY });
+        onMouseDownChange(true);
+        // Request pointer lock for better mouse control
+        if (!document.pointerLockElement) {
+          document.body.requestPointerLock();
+        }
       }
     };
 
     const handleMouseUp = () => {
-      setIsMouseDown(false);
+      onMouseDownChange(false);
+    };
+
+    const handlePointerLockChange = () => {
+      if (!document.pointerLockElement) {
+        onMouseDownChange(false);
+      }
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
     };
-  }, [isMouseDown, cameraRotation, onRotationChange, lastMousePos]);
+  }, [cameraRotation, onRotationChange, onMouseDownChange]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -687,7 +694,7 @@ function TutorPlayer({
 }
 
 // -----------------------------
-// Main Updated Scene
+// Main Updated Scene with FIXED isMouseDown state
 // -----------------------------
 
 export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (index: number) => void }) {
@@ -719,6 +726,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
   const [nearDoorIndex, setNearDoorIndex] = useState<number | null>(null);
   const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1.6, 20));
   const [playerRotation, setPlayerRotation] = useState(0);
+  const [isMouseDown, setIsMouseDown] = useState(false); // FIXED: Added missing state
 
   const handleDoorClick = (index: number) => {
     if (onEnterClassroom) onEnterClassroom(index);
@@ -735,7 +743,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       top: 0, 
       left: 0,
       background: "#000000",
-      cursor: isMouseDown ? "grabbing" : "grab"
+      cursor: isMouseDown ? "grabbing" : "grab" // Now this works correctly
     }}>
       <Canvas 
         shadows 
@@ -758,6 +766,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           onPositionChange={(p) => setPlayerPos(p)}
           onDoorProximity={(idx) => setNearDoorIndex(idx)}
           onRotationChange={(rotation) => setPlayerRotation(rotation)}
+          onMouseDownChange={setIsMouseDown} // Pass the setter to TutorPlayer
           speed={3}
         />
       </Canvas>
