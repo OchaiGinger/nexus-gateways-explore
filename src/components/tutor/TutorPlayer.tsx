@@ -3,7 +3,7 @@ import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useRef, useState } from "react";
 
-export default function Player() {
+export default function TutorPlayer() {
   const { scene } = useGLTF("/models/character.glb");
   const playerRef = useRef();
   const speed = 0.1;
