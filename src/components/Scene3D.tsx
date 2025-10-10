@@ -1,6 +1,7 @@
+// Scene3D.tsx
 import { useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { KeyboardControls, Stars } from "@react-three/drei";
+import { KeyboardControls, Stars, Environment } from "@react-three/drei";
 import { useNavigate } from "react-router-dom";
 import { Player } from "./Player";
 import { Portal } from "./Portal";
@@ -22,45 +23,64 @@ function Ground() {
       {/* Main ground */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[200, 200, 50, 50]} />
-        <meshStandardMaterial
-          color="#0a0a1f"
-          metalness={0.3}
-          roughness={0.7}
-          wireframe={false}
-        />
+        <meshStandardMaterial color="#071028" metalness={0.25} roughness={0.6} />
       </mesh>
 
       {/* Grid overlay */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
         <planeGeometry args={[200, 200, 40, 40]} />
-        <meshBasicMaterial
-          color="#00ffff"
-          wireframe={true}
-          transparent
-          opacity={0.1}
-        />
+        <meshBasicMaterial color="#00ffff" wireframe={true} transparent opacity={0.06} />
       </mesh>
 
-      {/* Additional ground planes for depth */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
-        <planeGeometry args={[220, 220]} />
-        <meshStandardMaterial color="#050510" />
+      {/* subtle emissive inner circle for depth */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <circleGeometry args={[60, 64]} />
+        <meshStandardMaterial emissive="#002533" emissiveIntensity={0.45} roughness={1} />
       </mesh>
     </>
   );
 }
 
-function Lights() {
+function Lights({ portals }: { portals: { position: [number, number, number]; color?: string }[] }) {
   return (
     <>
-      <ambientLight intensity={0.3} />
+      <hemisphereLight skyColor="#cde7ff" groundColor="#0a0010" intensity={0.6} />
       <directionalLight
-        position={[10, 20, 10]}
-        intensity={1}
+        position={[12, 25, 10]}
+        intensity={1.0}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-far={100}
+        shadow-camera-left={-30}
+        shadow-camera-right={30}
+        shadow-camera-top={30}
+        shadow-camera-bottom={-30}
       />
-      <pointLight position={[0, 10, 0]} intensity={0.5} color="#00ffff" />
+      <spotLight
+        position={[-10, 18, -8]}
+        angle={0.35}
+        penumbra={0.4}
+        intensity={0.8}
+        castShadow
+        shadow-bias={-0.0005}
+      />
+      <pointLight position={[0, 10, 0]} intensity={0.25} />
+
+      {/* small colored point lights near portals to emphasize them */}
+      {portals.map((p, i) => (
+        <pointLight
+          key={`p-light-${i}`}
+          position={p.position}
+          intensity={0.9}
+          distance={12}
+          decay={1.5}
+          color={p.color || "#00ffff"}
+        />
+      ))}
+
+      {/* Environment (IBL) for nicer materials */}
+      <Environment preset="city" />
     </>
   );
 }
@@ -83,50 +103,52 @@ const walls = [
   { position: [40, 3, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], width: 80, height: 6, depth: 1 },
 ];
 
-const wallCollisions = walls.map(wall => ({
+const wallCollisions = walls.map((wall) => ({
   position: wall.position,
   width: wall.rotation[1] === 0 ? wall.width : 1,
   depth: wall.rotation[1] === 0 ? 1 : wall.width,
 }));
 
-function Scene({ onPortalProximity, onPortalEnter }: { onPortalProximity: (name: string | null) => void; onPortalEnter: (route: string, label: string) => void }) {
+function Scene({
+  onPortalProximity,
+  onPortalEnter,
+}: {
+  onPortalProximity: (name: string | null) => void;
+  onPortalEnter: (route: string, label: string) => void;
+}) {
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, 0));
-  const [cameraRotation, setCameraRotation] = useState(0);
+  // Ready Player Me public GLB URL placeholder:
+  // Replace the string below with the actual public GLB URL you get from Ready Player Me.
+  const READY_PLAYER_ME_GLTF_URL = "PASTE_READY_PLAYER_ME_GLTF_URL_HERE";
 
   return (
     <>
-      <Lights />
+      {/* scene fog */}
+      <fog attach="fog" args={["#000015", 10, 220]} />
+
+      <Lights portals={portals} />
       <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
       <Ground />
-      <Player 
-        onPositionChange={setPlayerPosition} 
+
+      <Player
+        modelUrl={READY_PLAYER_ME_GLTF_URL} // <--- paste your Ready Player Me GLB public URL here
+        onPositionChange={setPlayerPosition}
         portals={portals}
         walls={wallCollisions}
         onPortalProximity={onPortalProximity}
         onPortalEnter={onPortalEnter}
-        cameraRotation={cameraRotation}
       />
-      <Camera target={playerPosition} onCameraRotation={setCameraRotation} />
-      
-      {/* Walls */}
-      {walls.map((wall, index) => (
-        <Wall
-          key={`wall-${index}`}
-          position={wall.position}
-          rotation={wall.rotation}
-          width={wall.width}
-          height={wall.height}
-        />
+
+      <Camera target={playerPosition} />
+
+      {/* walls */}
+      {walls.map((wall, idx) => (
+        <Wall key={idx} position={wall.position} rotation={wall.rotation} width={wall.width} height={wall.height} />
       ))}
-      
-      {/* Portals */}
-      {portals.map((portal, index) => (
-        <Portal
-          key={`portal-${index}`}
-          position={portal.position}
-          color={portal.color}
-          label={portal.label}
-        />
+
+      {/* portals */}
+      {portals.map((p, idx) => (
+        <Portal key={idx} position={p.position} color={p.color} label={p.label} />
       ))}
     </>
   );
@@ -141,7 +163,7 @@ export function Scene3D() {
   const handlePortalEnter = (route: string, label: string) => {
     setIsTransitioning(true);
     setTransitioningPortal(label);
-    
+
     // Delay navigation for smooth transition
     setTimeout(() => {
       navigate(route);
@@ -153,14 +175,14 @@ export function Scene3D() {
   return (
     <div style={{ width: "100vw", height: "100vh", position: "fixed", top: 0, left: 0 }}>
       <KeyboardControls map={keyboardMap}>
-        <Canvas shadows camera={{ position: [0, 5, 10], fov: 75 }}>
+        <Canvas shadows camera={{ position: [0, 5, 10], fov: 75 }} gl={{ antialias: true }}>
           <Scene onPortalProximity={setNearPortal} onPortalEnter={handlePortalEnter} />
         </Canvas>
       </KeyboardControls>
 
       {/* Transition overlay */}
       <PortalTransition isTransitioning={isTransitioning} portalName={transitioningPortal} />
-      
+
       {/* Controls overlay */}
       <div
         style={{
@@ -190,11 +212,5 @@ export function Scene3D() {
             opacity: 1;
           }
           50% {
-            transform: translate(-50%, -50%) scale(1.05);
-            opacity: 0.9;
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
+            transfor
+
