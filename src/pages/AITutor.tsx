@@ -1,8 +1,8 @@
-import { HallwayScene } from "@/components/tutor/HallwayScene";
+import { HallwaySceneFPS } from "@/components/tutor/HallwayScene";
 
 const AITutor = () => {
   // Immediately show hallway scene (no welcome page)
-  return <HallwayScene />;
+  return <HallwaySceneFPS/>;
 };
 
 export default AITutor;
