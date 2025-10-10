@@ -4,7 +4,11 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text, Stars } from "@react-three/drei";
 
 /**
- * Updated HallwayScene with visible player body and marker in FPS view
+ * Updated HallwayScene with:
+ * 1. Reduced player speed
+ * 2. Enhanced door design with realism
+ * 3. Fixed label alignment (not inside walls)
+ * 4. Removed wall to L-wing (open gap)
  */
 
 // -----------------------------
@@ -37,11 +41,11 @@ const BRANCH_AREA = { minX: 9.5, maxX: 30.5, minZ: -20, maxZ: 4, minY: 0, maxY: 
 
 // door appearance
 const DOOR_THICKNESS = 0.15;
-const DOOR_WIDTH = 1.8;
-const DOOR_HEIGHT = 2.4;
+const DOOR_WIDTH = 2.0;
+const DOOR_HEIGHT = 2.6;
 
 // -----------------------------
-// Updated Door component
+// Enhanced Door component with realistic design
 // -----------------------------
 
 function Door({
@@ -53,48 +57,93 @@ function Door({
   onClick: (index: number) => void;
   hovered: boolean;
 }) {
-  const { worldPosition } = info;
+  const { worldPosition, rotationY } = info;
 
   return (
-    <group position={worldPosition}>
-      {/* Door frame */}
-      <mesh position={[0, DOOR_HEIGHT / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[DOOR_THICKNESS + 0.05, DOOR_HEIGHT + 0.2, DOOR_WIDTH + 0.1]} />
-        <meshStandardMaterial color="#2a2a2a" metalness={0.3} roughness={0.7} />
-      </mesh>
+    <group position={worldPosition} rotation={[0, rotationY, 0]}>
+      {/* Enhanced Door Frame */}
+      <group position={[0, DOOR_HEIGHT / 2, 0]}>
+        {/* Main frame */}
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[DOOR_THICKNESS + 0.1, DOOR_HEIGHT + 0.3, DOOR_WIDTH + 0.15]} />
+          <meshStandardMaterial color="#3a3a3a" metalness={0.4} roughness={0.6} />
+        </mesh>
+        
+        {/* Door slab - positioned to touch the ground */}
+        <mesh
+          position={[0, 0, 0]}
+          castShadow
+          receiveShadow
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick(info.index);
+          }}
+        >
+          <boxGeometry args={[DOOR_THICKNESS, DOOR_HEIGHT, DOOR_WIDTH]} />
+          <meshStandardMaterial
+            color={info.isInSession ? "#5a5a8a" : "#4a6a7a"}
+            metalness={0.3}
+            roughness={0.5}
+          />
+        </mesh>
 
-      {/* Door slab - positioned to touch the ground */}
-      <mesh
-        position={[0, DOOR_HEIGHT / 2, 0]}
-        castShadow
-        receiveShadow
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick(info.index);
-        }}
-      >
-        <boxGeometry args={[DOOR_THICKNESS, DOOR_HEIGHT, DOOR_WIDTH]} />
-        <meshStandardMaterial
-          color={info.isInSession ? "#6a6aaa" : "#4a6a7a"}
-          metalness={0.2}
-          roughness={0.5}
+        {/* Door panels for realism */}
+        <mesh position={[0, 0.5, 0]} castShadow>
+          <boxGeometry args={[DOOR_THICKNESS - 0.02, 0.8, DOOR_WIDTH - 0.3]} />
+          <meshStandardMaterial color="#4a4a4a" metalness={0.5} roughness={0.4} />
+        </mesh>
+        <mesh position={[0, -0.5, 0]} castShadow>
+          <boxGeometry args={[DOOR_THICKNESS - 0.02, 0.8, DOOR_WIDTH - 0.3]} />
+          <meshStandardMaterial color="#4a4a4a" metalness={0.5} roughness={0.4} />
+        </mesh>
+
+        {/* Enhanced Door handle */}
+        <group position={[0, 0, DOOR_WIDTH / 2 - 0.08]}>
+          <mesh castShadow>
+            <cylinderGeometry args={[0.04, 0.04, 0.12, 8]} />
+            <meshStandardMaterial color="#cccccc" metalness={0.9} roughness={0.1} />
+          </mesh>
+          <mesh position={[0.08, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[0.02, 0.02, 0.16, 8]} />
+            <meshStandardMaterial color="#aaaaaa" metalness={0.8} roughness={0.2} />
+          </mesh>
+        </group>
+
+        {/* Door hinges */}
+        <mesh position={[0, 0.7, -DOOR_WIDTH / 2 + 0.05]} castShadow>
+          <cylinderGeometry args={[0.03, 0.03, 0.08, 8]} />
+          <meshStandardMaterial color="#888888" metalness={0.7} roughness={0.3} />
+        </mesh>
+        <mesh position={[0, -0.7, -DOOR_WIDTH / 2 + 0.05]} castShadow>
+          <cylinderGeometry args={[0.03, 0.03, 0.08, 8]} />
+          <meshStandardMaterial color="#888888" metalness={0.7} roughness={0.3} />
+        </mesh>
+      </group>
+
+      {/* Session status indicator - moved to be more visible */}
+      <mesh position={[0.2, DOOR_HEIGHT + 0.2, 0]} castShadow>
+        <sphereGeometry args={[0.1, 12, 12]} />
+        <meshStandardMaterial 
+          color={info.isInSession ? "#00ff88" : "#ff4444"}
+          emissive={info.isInSession ? "#00ff88" : "#ff4444"}
+          emissiveIntensity={0.8}
         />
       </mesh>
 
-      {/* Door handle */}
-      <mesh position={[0, DOOR_HEIGHT / 2 - 0.3, DOOR_WIDTH / 2 - 0.05]} castShadow>
-        <cylinderGeometry args={[0.03, 0.03, 0.1, 8]} />
-        <meshStandardMaterial color="#ffffff" metalness={0.9} roughness={0.1} />
-      </mesh>
-
-      {/* Door label with bright background */}
-      <group position={[0, DOOR_HEIGHT + 0.5, 0]}>
+      {/* Enhanced Door label - properly positioned outside the wall */}
+      <group position={[0.3, DOOR_HEIGHT + 0.5, 0]}>
         <mesh position={[0, 0, -0.01]}>
-          <planeGeometry args={[1.8, 0.3]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.9} />
+          <planeGeometry args={[2.0, 0.4]} />
+          <meshStandardMaterial 
+            color="#ffffff" 
+            transparent 
+            opacity={0.95}
+            metalness={0.1}
+            roughness={0.2}
+          />
         </mesh>
         <Text
-          fontSize={0.15}
+          fontSize={0.16}
           anchorX="center"
           anchorY="middle"
           color="#000000"
@@ -102,35 +151,42 @@ function Door({
         >
           {info.label}
         </Text>
+        {/* Label frame */}
+        <mesh position={[0, 0, -0.02]}>
+          <planeGeometry args={[2.05, 0.45]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
       </group>
 
-      {/* Session status indicator */}
-      <mesh position={[0, DOOR_HEIGHT + 0.15, 0]} castShadow>
-        <sphereGeometry args={[0.08, 8, 8]} />
-        <meshStandardMaterial 
-          color={info.isInSession ? "#00ff88" : "#ff4444"}
-          emissive={info.isInSession ? "#00ff88" : "#ff4444"}
-          emissiveIntensity={0.5}
-        />
-      </mesh>
-
-      {/* Bright hover indicator */}
+      {/* Enhanced hover indicator */}
       {hovered && (
-        <mesh position={[0, DOOR_HEIGHT / 2, DOOR_WIDTH / 2 + 0.1]}>
-          <sphereGeometry args={[0.15, 16, 16]} />
-          <meshStandardMaterial 
-            color="#ffff00"
-            emissive="#ffff00"
-            emissiveIntensity={1.0}
-          />
-        </mesh>
+        <group>
+          <mesh position={[0.2, DOOR_HEIGHT / 2, DOOR_WIDTH / 2 + 0.15]}>
+            <sphereGeometry args={[0.18, 16, 16]} />
+            <meshStandardMaterial 
+              color="#ffff00"
+              emissive="#ffff00"
+              emissiveIntensity={1.2}
+            />
+          </mesh>
+          {/* Hover glow effect around door */}
+          <mesh position={[0, DOOR_HEIGHT / 2, 0]}>
+            <boxGeometry args={[DOOR_THICKNESS + 0.2, DOOR_HEIGHT + 0.2, DOOR_WIDTH + 0.2]} />
+            <meshBasicMaterial 
+              color="#ffff00" 
+              transparent 
+              opacity={0.15}
+              side={THREE.BackSide}
+            />
+          </mesh>
+        </group>
       )}
     </group>
   );
 }
 
 // -----------------------------
-// Enhanced Player Direction Marker - Now visible in FPS
+// Enhanced Player Direction Marker
 // -----------------------------
 
 function PlayerDirectionMarker({ position, rotation }: { position: THREE.Vector3; rotation: number }) {
@@ -184,7 +240,7 @@ function PlayerDirectionMarker({ position, rotation }: { position: THREE.Vector3
 }
 
 // -----------------------------
-// FPS Player Body - Visible parts in first person
+// FPS Player Body
 // -----------------------------
 
 function FPSPlayerBody({ position, rotation }: { position: THREE.Vector3; rotation: number }) {
@@ -217,7 +273,7 @@ function FPSPlayerBody({ position, rotation }: { position: THREE.Vector3; rotati
 }
 
 // -----------------------------
-// Updated Hallway with open gap to L-section
+// Updated Hallway with NO wall to L-section
 // -----------------------------
 
 function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, playerRotation }: { 
@@ -250,8 +306,10 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         <boxGeometry args={[0.5, 10, 60]} />
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
-      <mesh position={[10, 5, 0]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 10, 60]} />
+      
+      {/* Right wall - ONLY up to the L-section opening */}
+      <mesh position={[10, 5, -18]} receiveShadow castShadow>
+        <boxGeometry args={[0.5, 10, 24]} /> {/* Only covers area before L-section */}
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
 
@@ -264,6 +322,9 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         <boxGeometry args={[0.5, 10, 24]} />
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
+
+      {/* REMOVED: The inner partition wall between main corridor and L-section */}
+      {/* This creates the open gap we want */}
 
       {/* Bright ceiling */}
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 10, 0]} receiveShadow>
@@ -281,14 +342,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         if (zPos <= 30) {
           return (
             <group key={`main-light-${i}`} position={[0, 9.8, zPos]}>
-              {/* Bright point light */}
-              <pointLight 
-                intensity={2.0} 
-                distance={20} 
-                color="#ffffff"
-                decay={1}
-              />
-              {/* Light fixture */}
+              <pointLight intensity={2.0} distance={20} color="#ffffff" decay={1} />
               <mesh castShadow position={[0, -0.1, 0]}>
                 <cylinderGeometry args={[0.4, 0.5, 0.2, 16]} />
                 <meshStandardMaterial 
@@ -325,7 +379,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         );
       })}
 
-      {/* Emergency exit signs with bright emission */}
+      {/* Emergency exit signs */}
       <group position={[0, 8, -29]}>
         <mesh position={[0, 0, 0.1]}>
           <boxGeometry args={[1.5, 0.4, 0.1]} />
@@ -347,27 +401,20 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         </Text>
       </group>
 
-      {/* Bright direction signs */}
-      <group position={[0, 7, 0]}>
+      {/* L-Section entrance marker - Now more prominent */}
+      <group position={[5, 3, -8]}>
+        <mesh position={[0, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
+          <planeGeometry args={[3, 0.8]} />
+          <meshStandardMaterial color="#ffff00" transparent opacity={0.8} />
+        </mesh>
         <Text 
-          fontSize={0.5} 
-          color="#00ffff" 
+          position={[0, 0, 0.01]} 
+          fontSize={0.25} 
+          color="#000000" 
           anchorX="center" 
           anchorY="middle"
           fontWeight="bold"
-        >
-          ACADEMIC WING
-        </Text>
-      </group>
-
-      {/* L-Section entrance marker */}
-      <group position={[9.5, 3, -8]}>
-        <Text 
-          fontSize={0.3} 
-          color="#ffff00" 
-          anchorX="center" 
-          anchorY="middle"
-          fontWeight="bold"
+          rotation={[0, -Math.PI / 2, 0]}
         >
           L-SECTION →
         </Text>
@@ -378,10 +425,10 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         <Door key={d.index} info={d} onClick={onDoorClick} hovered={nearDoorIndex === d.index} />
       ))}
 
-      {/* Enhanced Player Direction Marker - Now much more visible */}
+      {/* Enhanced Player Direction Marker */}
       <PlayerDirectionMarker position={playerPos} rotation={playerRotation} />
       
-      {/* FPS Player Body - Visible when looking down */}
+      {/* FPS Player Body */}
       <FPSPlayerBody position={playerPos} rotation={playerRotation} />
 
       {/* Enhanced lighting setup */}
@@ -415,7 +462,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
 }
 
 // -----------------------------
-// Updated TutorPlayer (FPS) - With visible body parts
+// Updated TutorPlayer with REDUCED speed
 // -----------------------------
 
 function TutorPlayer({
@@ -423,7 +470,7 @@ function TutorPlayer({
   onPositionChange,
   onDoorProximity,
   onRotationChange,
-  speed = 6,
+  speed = 3, // REDUCED from 6 to 3
 }: {
   doors: { position: [number, number, number] }[];
   onPositionChange: (p: THREE.Vector3) => void;
@@ -580,24 +627,23 @@ function TutorPlayer({
 // -----------------------------
 
 export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (index: number) => void }) {
-  // Compute door positions - now all doors face the center of hallway
+  // Compute door positions - all doors properly face the hallway
   const doorWorldInfos = classroomsInput.map((c) => {
     const [xRaw, yRaw, zRaw] = c.originalPosition;
 
-    // Determine which wall the door is on and position it accordingly
     let worldPos: [number, number, number] = [xRaw, DOOR_HEIGHT / 2, zRaw];
     let rotationY = 0;
 
     if (xRaw < 0) {
-      // Left wall - door faces right (positive X)
+      // Left wall doors - position and rotate to face right (toward center)
       worldPos = [-9.75, DOOR_HEIGHT / 2, zRaw];
-      rotationY = 0; // Faces toward center
+      rotationY = 0; // Faces toward center (positive X)
     } else if (xRaw > 0 && xRaw < 10) {
-      // Right wall - door faces left (negative X)
+      // Right wall doors - position and rotate to face left (toward center)
       worldPos = [9.75, DOOR_HEIGHT / 2, zRaw];
-      rotationY = Math.PI; // Faces toward center
+      rotationY = Math.PI; // Faces toward center (negative X)
     } else {
-      // L-section doors - position on the right wall facing left
+      // L-section doors - position on side walls facing the corridor
       worldPos = [xRaw, DOOR_HEIGHT / 2, -7.75];
       rotationY = -Math.PI / 2; // Faces toward center of L-section
     }
@@ -632,7 +678,6 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
         camera={{ position: [0, 1.6, 20], fov: 75 }}
         gl={{ antialias: true }}
       >
-        {/* Reduced fog for better visibility */}
         <fog attach="fog" args={["#1a1a3a", 15, 60]} />
         <Stars radius={100} depth={50} count={1000} factor={2} saturation={0} fade speed={0.5} />
 
@@ -649,11 +694,11 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           onPositionChange={(p) => setPlayerPos(p)}
           onDoorProximity={(idx) => setNearDoorIndex(idx)}
           onRotationChange={(rotation) => setPlayerRotation(rotation)}
-          speed={6}
+          speed={3} // Reduced speed for better control
         />
       </Canvas>
 
-      {/* Bright HUD overlay */}
+      {/* HUD overlay */}
       {nearDoorIndex !== null && (
         <div
           style={{
@@ -709,7 +754,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
         </div>
       )}
 
-      {/* Updated controls hint */}
+      {/* Controls hint */}
       <div
         style={{
           position: "absolute",
