@@ -885,7 +885,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       >
         <div style={{ marginBottom: "5px" }}>🏫 ACADEMIC WING</div>
         <div>📍 10 Classrooms</div>
-        <div>🎯 L-Shaped Layout</div>
+        <div>🎯 -Shaped Layout</div>
         <div style={{ marginTop: "5px", color: "#ff0000", fontSize: "12px" }}>
           🔺 Look down to see position marker
         </div>
