@@ -1,430 +1,453 @@
-import React, { useRef, useState, useEffect } from "react";
+import { useState } from "react";
+import { Canvas } from "@react-three/fiber";
+import { KeyboardControls, Stars } from "@react-three/drei";
 import * as THREE from "three";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { PointerLockControls, Text, Stars } from "@react-three/drei";
+import { Camera } from "../Camera";
+import { TutorPlayer } from "./TutorPlayer";
+import { Door } from "./Door";
+import { Classroom } from "./Classroom";
 
-/**
- * HallwayScene-FPS-L.tsx
- *
- * Single-file drop-in that implements:
- * - first-person (FPS) TutorPlayer using PointerLockControls
- * - doors that are rotated/back-against-wall (flush to wall)
- * - door proximity that requires both distance + player facing the door
- * - an L-shaped hallway (main corridor + side branch) with doors on both legs
- * - simple collision/clamping so the player can't walk through walls
- *
- * How to use:
- * - Drop this file into your React app and import `HallwaySceneFPS` where you want the scene.
- * - It expects you already have a separate `Classroom` component for the classroom view (the scene will render a simple placeholder).
- * - If you want the classroom to open when entering a door, wire `onEnterDoor(index)` to your router or parent state.
- */
-
-// -----------------------------
-// Helper types & data
-// -----------------------------
-
-type DoorInfo = {
-  index: number;
-  label: string;
-  originalPosition: [number, number, number]; // our input positions (used to decide which wall the door belongs to)
-  isInSession: boolean;
-};
-
-const classroomsInput: DoorInfo[] = [
-  { index: 0, label: "Mathematics", originalPosition: [-6, 2, -20], isInSession: true },
-  { index: 1, label: "Physics", originalPosition: [6, 2, -20], isInSession: false },
-  { index: 2, label: "Computer Science", originalPosition: [-6, 2, -10], isInSession: true },
-  { index: 3, label: "Chemistry", originalPosition: [6, 2, -10], isInSession: false },
-  { index: 4, label: "Biology", originalPosition: [-6, 2, 0], isInSession: true },
-  { index: 5, label: "Literature", originalPosition: [6, 2, 0], isInSession: false },
-  { index: 6, label: "History", originalPosition: [-6, 2, 10], isInSession: false },
-  { index: 7, label: "Art & Design", originalPosition: [6, 2, 10], isInSession: true },
-  // L-branch doors (on the right branch)
-  { index: 8, label: "Robotics Lab", originalPosition: [20, 2, -8], isInSession: true },
-  { index: 9, label: "Media Room", originalPosition: [26, 2, -8], isInSession: false },
+const keyboardMap = [
+  { name: "forward", keys: ["ArrowUp", "KeyW"] },
+  { name: "backward", keys: ["ArrowDown", "KeyS"] },
+  { name: "left", keys: ["ArrowLeft", "KeyA"] },
+  { name: "right", keys: ["ArrowRight", "KeyD"] },
 ];
 
-// Corridor / geometry config
-const MAIN_AREA = { minX: -9.5, maxX: 9.5, minZ: -30, maxZ: 30 };
-const BRANCH_AREA = { minX: 9.5, maxX: 30.5, minZ: -20, maxZ: 4 };
+// Enhanced classrooms with L-shaped positioning
+const classrooms = [
+  // Main corridor (z-axis)
+  { name: "Mathematics", position: [-8, 2, -25], side: "left", inSession: true },
+  { name: "Physics", position: [8, 2, -25], side: "right", inSession: false },
+  { name: "Computer Science", position: [-8, 2, -15], side: "left", inSession: true },
+  { name: "Chemistry", position: [8, 2, -15], side: "right", inSession: false },
+  { name: "Biology", position: [-8, 2, -5], side: "left", inSession: true },
+  { name: "Literature", position: [8, 2, -5], side: "right", inSession: false },
+  
+  // L-shaped corridor (x-axis)
+  { name: "History", position: [-15, 2, 5], side: "left", inSession: false },
+  { name: "Art & Design", position: [-25, 2, 5], side: "left", inSession: true },
+  { name: "Music", position: [-35, 2, 5], side: "left", inSession: false },
+  { name: "Economics", position: [15, 2, 5], side: "right", inSession: true },
+  { name: "Psychology", position: [25, 2, 5], side: "right", inSession: false },
+  { name: "Engineering", position: [35, 2, 5], side: "right", inSession: true },
+];
 
-// door appearance
-const DOOR_THICKNESS = 0.2;
-const DOOR_WIDTH = 1.2;
-const DOOR_HEIGHT = 2.2;
-
-// -----------------------------
-// Door component (flush to nearest wall)
-// -----------------------------
-
-function Door({
-  info,
-  onClick,
-  hovered,
-}: {
-  info: DoorInfo & { worldPosition: [number, number, number]; rotationY: number };
-  onClick: (index: number) => void;
-  hovered: boolean;
-}) {
-  const { worldPosition, rotationY } = info;
-
-  return (
-    <group position={worldPosition} rotation={[0, rotationY, 0]}>
-      {/* door slab */}
-      <mesh
-        position={[0, DOOR_HEIGHT / 2, 0]}
-        castShadow
-        receiveShadow
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick(info.index);
-        }}
-      >
-        {/* thin slab oriented so its 'face' is facing the corridor */}
-        <boxGeometry args={[DOOR_THICKNESS, DOOR_HEIGHT, DOOR_WIDTH]} />
-        <meshStandardMaterial
-          color={info.isInSession ? "#ff4dff" : "#00ffff"}
-          metalness={0.2}
-          roughness={0.4}
-        />
-      </mesh>
-
-      {/* door label */}
-      <Text
-        position={[0, DOOR_HEIGHT + 0.35, 0]}
-        fontSize={0.22}
-        anchorX="center"
-        anchorY="middle"
-        color="#ffffff"
-      >
-        {info.label}
-      </Text>
-
-      {/* small indicator in front when hovered / available */}
-      {hovered && (
-        <mesh position={[0, DOOR_HEIGHT / 2 - 0.1, (DOOR_WIDTH / 2 + 0.05)]}>
-          <sphereGeometry args={[0.08, 10, 10]} />
-          <meshStandardMaterial emissive={new THREE.Color("#ff4dff")} emissiveIntensity={0.9} />
-        </mesh>
-      )}
-    </group>
-  );
-}
-
-// -----------------------------
-// TutorPlayer (FPS) - pointer lock + movement + proximity checks
-// -----------------------------
-
-function TutorPlayer({
-  doors,
-  onPositionChange,
-  onDoorProximity,
-  speed = 6,
-}: {
-  doors: { position: [number, number, number] }[];
-  onPositionChange: (p: THREE.Vector3) => void;
-  onDoorProximity: (index: number | null) => void;
-  speed?: number;
-}) {
-  const controlsRef = useRef<any>(null);
-  const { camera, gl } = useThree();
-
-  const keyState = useRef({ forward: false, backward: false, left: false, right: false });
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "KeyW" || e.code === "ArrowUp") keyState.current.forward = true;
-      if (e.code === "KeyS" || e.code === "ArrowDown") keyState.current.backward = true;
-      if (e.code === "KeyA" || e.code === "ArrowLeft") keyState.current.left = true;
-      if (e.code === "KeyD" || e.code === "ArrowRight") keyState.current.right = true;
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "KeyW" || e.code === "ArrowUp") keyState.current.forward = false;
-      if (e.code === "KeyS" || e.code === "ArrowDown") keyState.current.backward = false;
-      if (e.code === "KeyA" || e.code === "ArrowLeft") keyState.current.left = false;
-      if (e.code === "KeyD" || e.code === "ArrowRight") keyState.current.right = false;
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-    };
-  }, []);
-
-  // to signal hovered door index (for small indicator/tooltip)
-  const [hoveredDoorIndex, setHoveredDoorIndex] = useState<number | null>(null);
-
-  // reused vectors
-  const frontVector = new THREE.Vector3();
-  const sideVector = new THREE.Vector3();
-  const direction = new THREE.Vector3();
-  const tmpVec = new THREE.Vector3();
-  const cameraDir = new THREE.Vector3();
-
-  // proximity logic thresholds
-  const DIST_THRESHOLD = 2.2; // how close to a door
-  const FACING_THRESHOLD = 0.6; // how much the player must be facing the door (dot product)
-
-  useFrame((state, delta) => {
-    if (!controlsRef.current) return;
-
-    const controls = controlsRef.current;
-    const object = controls.getObject(); // the camera group controlled by PointerLockControls
-    if (!object) return;
-
-    // store previous position so we can revert if collision
-    const prevPos = object.position.clone();
-
-    // build movement vector in local space
-    frontVector.set(0, 0, Number(keyState.current.backward) - Number(keyState.current.forward));
-    sideVector.set(Number(keyState.current.right) - Number(keyState.current.left), 0, 0);
-    direction.copy(frontVector).add(sideVector);
-    if (direction.lengthSq() > 0) {
-      direction.normalize();
-      // translate in local space (PointerLockControls attaches a local object)
-      object.translateX(direction.x * speed * delta);
-      object.translateZ(direction.z * speed * delta);
-
-      // clamp / collision simple: reject movement that leaves allowed areas
-      const px = object.position.x;
-      const pz = object.position.z;
-
-      const inMain = px >= MAIN_AREA.minX && px <= MAIN_AREA.maxX && pz >= MAIN_AREA.minZ && pz <= MAIN_AREA.maxZ;
-      const inBranch = px >= BRANCH_AREA.minX && px <= BRANCH_AREA.maxX && pz >= BRANCH_AREA.minZ && pz <= BRANCH_AREA.maxZ;
-
-      if (!inMain && !inBranch) {
-        // revert
-        object.position.copy(prevPos);
-      }
-    }
-
-    // update parent/state about position
-    onPositionChange(object.position.clone());
-
-    // Door proximity: require closeness AND that the player is looking at the door
-    state.camera.getWorldDirection(cameraDir); // pointing vector
-
-    let closestIndex: number | null = null;
-    let closestDist = Infinity;
-
-    doors.forEach((d, i) => {
-      tmpVec.set(d.position[0], d.position[1], d.position[2]);
-      const toDoor = tmpVec.clone().sub(object.position);
-      const dist = toDoor.length();
-      if (dist <= DIST_THRESHOLD) {
-        toDoor.normalize();
-        const facing = cameraDir.dot(toDoor); // how much camera looks at door
-        if (facing >= FACING_THRESHOLD) {
-          if (dist < closestDist) {
-            closestDist = dist;
-            closestIndex = i;
-          }
-        }
-      }
-    });
-
-    // only call callback when value changes
-    onDoorProximity(closestIndex);
-    setHoveredDoorIndex(closestIndex);
-  });
-
-  return (
-    <>
-      {/* PointerLockControls automatically requests pointer lock on click */}
-      <PointerLockControls ref={controlsRef} />
-    </>
-  );
-}
-
-// -----------------------------
-// Hallway with floors + walls + doors (L shaped)
-// -----------------------------
-
-function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex }: { onDoorClick: (i: number) => void; doorWorldInfos: (DoorInfo & { worldPosition: [number, number, number]; rotationY: number })[]; nearDoorIndex: number | null; }) {
+function Hallway({ onDoorClick, nearDoorIndex }: { onDoorClick: (index: number) => void; nearDoorIndex: number | null }) {
   return (
     <group>
-      {/* Main floor (long) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[20, 60]} />
+      {/* Main corridor floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -10]} receiveShadow>
+        <planeGeometry args={[20, 40]} />
         <meshStandardMaterial color="#0a0a1f" />
       </mesh>
 
-      {/* L-branch floor (attached to right side, near z = -8) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[19.75, 0, -8]} receiveShadow>
-        {/* width along X, depth along Z - this gives a "branch" to the right */}
-        <planeGeometry args={[22, 24]} />
-        <meshStandardMaterial color="#071028" />
+      {/* L-shaped extension floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 10]} receiveShadow>
+        <planeGeometry args={[60, 20]} />
+        <meshStandardMaterial color="#0a0a1f" />
       </mesh>
 
-      {/* Main corridor side walls */}
-      <mesh position={[-10, 5, 0]} receiveShadow>
-        <boxGeometry args={[0.5, 10, 60]} />
-        <meshStandardMaterial color="#1a1a2e" />
+      {/* Grid overlay - Main corridor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, -10]}>
+        <planeGeometry args={[20, 40, 20, 40]} />
+        <meshBasicMaterial color="#ff4dff" wireframe transparent opacity={0.1} />
       </mesh>
-      <mesh position={[10, 5, 0]} receiveShadow>
-        <boxGeometry args={[0.5, 10, 60]} />
+
+      {/* Grid overlay - L-shaped extension */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 10]}>
+        <planeGeometry args={[60, 20, 60, 20]} />
+        <meshBasicMaterial color="#ff4dff" wireframe transparent opacity={0.1} />
+      </mesh>
+
+      {/* Walls - Main corridor */}
+      {/* Left wall */}
+      <mesh position={[-10, 5, -10]} receiveShadow>
+        <boxGeometry args={[0.5, 10, 40]} />
         <meshStandardMaterial color="#1a1a2e" />
       </mesh>
 
-      {/* Branch walls: branch runs roughly from x=9.5 to x=30 */}
-      {/* back wall of branch (connecting to main corridor) */}
-      <mesh position={[19.75, 5, -20]} receiveShadow>
-        <boxGeometry args={[22, 10, 0.5]} />
+      {/* Right wall */}
+      <mesh position={[10, 5, -10]} receiveShadow>
+        <boxGeometry args={[0.5, 10, 40]} />
         <meshStandardMaterial color="#1a1a2e" />
       </mesh>
-      {/* outer right wall of branch */}
-      <mesh position={[30.5, 5, -8]} receiveShadow>
-        <boxGeometry args={[0.5, 10, 24]} />
+
+      {/* Back wall */}
+      <mesh position={[0, 5, -30]} receiveShadow>
+        <boxGeometry args={[20, 10, 0.5]} />
         <meshStandardMaterial color="#1a1a2e" />
       </mesh>
-      {/* inner partition between main corridor and branch (visual only) */}
-      <mesh position={[10, 5, -8]} receiveShadow>
-        <boxGeometry args={[0.5, 10, 24]} />
-        <meshStandardMaterial color="#16213e" />
+
+      {/* Walls - L-shaped extension */}
+      {/* Left wall of L-shape */}
+      <mesh position={[-30, 5, 10]} receiveShadow>
+        <boxGeometry args={[0.5, 10, 20]} />
+        <meshStandardMaterial color="#1a1a2e" />
       </mesh>
 
-      {/* Floor grid (subtle) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <planeGeometry args={[20, 60, 20, 60]} />
-        <meshBasicMaterial color="#ff4dff" wireframe transparent opacity={0.06} />
+      {/* Right wall of L-shape */}
+      <mesh position={[30, 5, 10]} receiveShadow>
+        <boxGeometry args={[0.5, 10, 20]} />
+        <meshStandardMaterial color="#1a1a2e" />
       </mesh>
 
-      {/* Doors (computed world positions passed in) */}
-      {doorWorldInfos.map((d) => (
-        <Door key={d.index} info={d} onClick={onDoorClick} hovered={nearDoorIndex === d.index} />
+      {/* Front wall */}
+      <mesh position={[0, 5, 20]} receiveShadow>
+        <boxGeometry args={[60, 10, 0.5]} />
+        <meshStandardMaterial color="#1a1a2e" />
+      </mesh>
+
+      {/* Connecting wall between corridors */}
+      <mesh position={[0, 5, 0]} receiveShadow>
+        <boxGeometry args={[20, 10, 0.5]} />
+        <meshStandardMaterial color="#1a1a2e" />
+      </mesh>
+
+      {/* Opening in connecting wall */}
+      <mesh position={[0, 8, 0]} receiveShadow>
+        <boxGeometry args={[6, 4, 0.5]} />
+        <meshStandardMaterial color="#1a1a2e" transparent opacity={0.5} />
+      </mesh>
+
+      {/* Ceiling - Main corridor */}
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 10, -10]}>
+        <planeGeometry args={[20, 40]} />
+        <meshStandardMaterial color="#050510" />
+      </mesh>
+
+      {/* Ceiling - L-shaped extension */}
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 10, 10]}>
+        <planeGeometry args={[60, 20]} />
+        <meshStandardMaterial color="#050510" />
+      </mesh>
+
+      {/* Doors with proper rotation for FPS */}
+      {classrooms.map((classroom, index) => {
+        let rotation: [number, number, number] = [0, 0, 0];
+        
+        // Rotate doors to face the hallway properly
+        if (classroom.side === "left") {
+          rotation = [0, Math.PI / 2, 0]; // Face right (toward center of hallway)
+        } else if (classroom.side === "right") {
+          rotation = [0, -Math.PI / 2, 0]; // Face left (toward center of hallway)
+        }
+
+        return (
+          <Door
+            key={index}
+            position={classroom.position as [number, number, number]}
+            rotation={rotation}
+            label={classroom.name}
+            isClassInSession={classroom.inSession}
+            onClick={() => onDoorClick(index)}
+          />
+        );
+      })}
+
+      {/* Direction indicators */}
+      <mesh position={[0, 3, -28]} rotation={[0, 0, 0]}>
+        <textGeometry args={["MAIN CORRIDOR", { size: 0.8, height: 0.1 }]} />
+        <meshStandardMaterial color="#00ffff" emissive="#00ffff" emissiveIntensity={0.5} />
+      </mesh>
+
+      <mesh position={[0, 3, 18]} rotation={[0, 0, 0]}>
+        <textGeometry args={["L-SHAPED WING", { size: 0.8, height: 0.1 }]} />
+        <meshStandardMaterial color="#00ffff" emissive="#00ffff" emissiveIntensity={0.5} />
+      </mesh>
+
+      {/* Ceiling lights - Main corridor */}
+      {Array.from({ length: 6 }).map((_, i) => (
+        <pointLight
+          key={`main-${i}`}
+          position={[0, 9, -25 + i * 8]}
+          intensity={0.8}
+          distance={12}
+          color="#ff4dff"
+        />
       ))}
 
-      {/* Lighting */}
+      {/* Ceiling lights - L-shaped extension */}
       {Array.from({ length: 8 }).map((_, i) => (
-        <pointLight key={i} position={[0, 9, -25 + i * 7]} intensity={0.6} distance={18} color="#ff4dff" />
+        <pointLight
+          key={`lshape-${i}`}
+          position={[-27.5 + i * 7.8, 9, 10]}
+          intensity={0.8}
+          distance={12}
+          color="#ff4dff"
+        />
       ))}
 
+      {/* Ambient light */}
       <ambientLight intensity={0.3} />
       <directionalLight position={[10, 20, 10]} intensity={0.5} castShadow />
     </group>
   );
 }
 
-// -----------------------------
-// Main exported scene wrapper
-// -----------------------------
+function Scene({ 
+  viewMode, 
+  selectedClassroom,
+  onDoorProximity,
+  nearDoorIndex
+}: { 
+  viewMode: 'hallway' | 'classroom';
+  selectedClassroom: number | null;
+  onDoorProximity: (index: number | null) => void;
+  nearDoorIndex: number | null;
+}) {
+  const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, -20));
+  const [cameraRotation, setCameraRotation] = useState(0);
+  const [, setNearDoor] = useState<number | null>(null);
 
-export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (index: number) => void }) {
-  // compute door world positions so they're flush against the nearest wall (left/right/front/back)
-  const doorWorldInfos = classroomsInput.map((c) => {
-    const [xRaw, yRaw, zRaw] = c.originalPosition;
+  const handleDoorProximity = (doorIndex: number | null) => {
+    setNearDoor(doorIndex);
+    onDoorProximity(doorIndex);
+  };
 
-    // Decide which wall the door belongs to by which side it's closer to
-    // (left/right prioritized; if near center we assume front/back)
-    const side = Math.abs(xRaw) >= Math.abs(zRaw) ? (xRaw < 0 ? "left" : "right") : (zRaw < 0 ? "back" : "front");
+  if (viewMode === 'classroom' && selectedClassroom !== null) {
+    return (
+      <>
+        <Stars radius={100} depth={50} count={2000} factor={4} saturation={0} fade speed={1} />
+        <Classroom roomName={classrooms[selectedClassroom].name} />
+        <TutorPlayer
+          onPositionChange={setPlayerPosition}
+          cameraRotation={cameraRotation}
+          onDoorProximity={handleDoorProximity}
+          doors={classrooms.map(c => ({ 
+            position: c.position as [number, number, number],
+            side: c.side 
+          }))}
+          isFPS={true}
+        />
+        <Camera target={playerPosition} onCameraRotation={setCameraRotation} isFPS={true} />
+      </>
+    );
+  }
 
-    let worldPos: [number, number, number] = [xRaw, yRaw, zRaw];
-    let rotationY = 0;
+  return (
+    <>
+      <Stars radius={100} depth={50} count={2000} factor={4} saturation={0} fade speed={1} />
+      <Hallway 
+        onDoorClick={() => {}} 
+        nearDoorIndex={nearDoorIndex}
+      />
+      <TutorPlayer
+        onPositionChange={setPlayerPosition}
+        cameraRotation={cameraRotation}
+        onDoorProximity={handleDoorProximity}
+        doors={classrooms.map(c => ({ 
+          position: c.position as [number, number, number],
+          side: c.side 
+        }))}
+        isFPS={true}
+      />
+      <Camera target={playerPosition} onCameraRotation={setCameraRotation} isFPS={true} />
+    </>
+  );
+}
 
-    if (side === "left") {
-      worldPos = [-9.75, yRaw, zRaw];
-      rotationY = Math.PI / 2 * -1; // -90deg so the door "back" is against wall and face points into corridor
-    } else if (side === "right") {
-      worldPos = [9.75, yRaw, zRaw];
-      rotationY = Math.PI / 2; // 90deg
-    } else if (side === "back") {
-      worldPos = [xRaw, yRaw, -29.75];
-      rotationY = Math.PI; // facing forward into corridor
-    } else {
-      // front
-      worldPos = [xRaw, yRaw, 29.75];
-      rotationY = 0;
-    }
-
-    return { ...c, worldPosition: worldPos, rotationY };
-  });
-
-  // doors prop for TutorPlayer should contain simple positions (y is not important for proximity checks)
-  const doorPositionsForPlayer = doorWorldInfos.map((d) => ({ position: d.worldPosition }));
-
+export function HallwayScene() {
+  const [viewMode, setViewMode] = useState<'hallway' | 'classroom'>('hallway');
+  const [selectedClassroom, setSelectedClassroom] = useState<number | null>(null);
   const [nearDoorIndex, setNearDoorIndex] = useState<number | null>(null);
-  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1, 20));
 
-  const handleDoorClick = (index: number) => {
-    // enter classroom: call parent or default behaviour
-    if (onEnterClassroom) onEnterClassroom(index);
-    else {
-      // default: just log and teleport to a simple classroom placeholder
-      console.log("Enter classroom", index, "- implement routing or state change in parent");
+  const handleEnterClassroom = () => {
+    if (nearDoorIndex !== null) {
+      setSelectedClassroom(nearDoorIndex);
+      setViewMode('classroom');
     }
   };
 
+  const handleExitClassroom = () => {
+    setViewMode('hallway');
+    setSelectedClassroom(null);
+  };
+
   return (
-    <div style={{ width: "100vw", height: "100vh", position: "fixed", inset: 0 }}>
-      <Canvas shadows camera={{ position: [0, 5, 25], fov: 75 }}>
-        <fog attach="fog" args={["#000015", 10, 220]} />
-        <Stars radius={100} depth={50} count={2000} factor={4} saturation={0} fade speed={1} />
+    <div style={{ width: "100vw", height: "100vh", position: "fixed", top: 0, left: 0 }}>
+      <KeyboardControls map={keyboardMap}>
+        <Canvas shadows camera={{ position: [0, 1.6, -20], fov: 75 }} gl={{ antialias: true }}>
+          <Scene 
+            viewMode={viewMode} 
+            selectedClassroom={selectedClassroom}
+            onDoorProximity={setNearDoorIndex}
+            nearDoorIndex={nearDoorIndex}
+          />
+        </Canvas>
+      </KeyboardControls>
 
-        <Hallway onDoorClick={handleDoorClick} doorWorldInfos={doorWorldInfos} nearDoorIndex={nearDoorIndex} />
-
-        <TutorPlayer
-          doors={doorPositionsForPlayer}
-          onPositionChange={(p) => setPlayerPos(p)}
-          onDoorProximity={(idx) => setNearDoorIndex(idx)}
-          speed={6}
-        />
-
-        {/* first-person camera is the PointerLockControls' camera; we still include a helper Camera light if needed */}
-      </Canvas>
-
-      {/* HUD overlay */}
-      {nearDoorIndex !== null && (
+      {/* Door proximity indicator */}
+      {nearDoorIndex !== null && viewMode === 'hallway' && (
         <div
           style={{
             position: "absolute",
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            background: "rgba(0,0,0,0.8)",
-            color: "#ff4dff",
-            padding: "14px 22px",
-            borderRadius: 12,
+            background: "rgba(0, 0, 0, 0.8)",
             border: "2px solid #ff4dff",
-            zIndex: 50,
+            borderRadius: "15px",
+            padding: "20px 40px",
+            color: "#ff4dff",
+            fontSize: "1.5rem",
+            fontWeight: "bold",
             textAlign: "center",
+            zIndex: 100,
+            boxShadow: "0 0 30px rgba(255, 77, 255, 0.5)",
           }}
         >
-          <div style={{ fontSize: "1.25rem", fontWeight: 700 }}>{classroomsInput[nearDoorIndex].label}</div>
-          <div style={{ marginTop: 6, opacity: 0.85 }}>
-            {classroomsInput[nearDoorIndex].isInSession ? "🟢 Class in session" : "🔴 Available"}
+          <div style={{ marginBottom: "8px" }}>
+            🚪 {classrooms[nearDoorIndex].name}
           </div>
-          <div style={{ marginTop: 8 }}>
-            <button
-              onClick={() => handleDoorClick(nearDoorIndex)}
-              style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#ff4dff", color: "#000", fontWeight: 700 }}
-            >
-              Enter
-            </button>
+          <div style={{ fontSize: "1rem", opacity: 0.8, fontWeight: "normal", marginBottom: "10px" }}>
+            {classrooms[nearDoorIndex].inSession ? "🟢 Class in Session" : "🔴 Available"}
           </div>
+          <button
+            onClick={handleEnterClassroom}
+            style={{
+              background: "#ff4dff",
+              color: "#000",
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: "8px",
+              fontSize: "1rem",
+              fontWeight: "bold",
+              cursor: "pointer",
+            }}
+          >
+            Press to Enter
+          </button>
         </div>
       )}
 
-      {/* small controls hint */}
+      {/* Exit classroom button */}
+      {viewMode === 'classroom' && (
+        <button
+          onClick={handleExitClassroom}
+          style={{
+            position: "absolute",
+            top: "20px",
+            right: "20px",
+            background: "#ff4dff",
+            color: "#000",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            fontSize: "1rem",
+            fontWeight: "bold",
+            cursor: "pointer",
+            zIndex: 100,
+          }}
+        >
+          Exit Classroom
+        </button>
+      )}
+
+      {/* FPS Crosshair */}
+      {viewMode === 'hallway' && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "20px",
+            height: "20px",
+            zIndex: 10,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "4px",
+              height: "4px",
+              background: "#ff4dff",
+              borderRadius: "50%",
+              boxShadow: "0 0 10px rgba(255, 77, 255, 0.5)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "16px",
+              height: "2px",
+              background: "transparent",
+              borderLeft: "1px solid #ff4dff",
+              borderRight: "1px solid #ff4dff",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "2px",
+              height: "16px",
+              background: "transparent",
+              borderTop: "1px solid #ff4dff",
+              borderBottom: "1px solid #ff4dff",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Controls overlay */}
       <div
         style={{
           position: "absolute",
-          bottom: 20,
+          bottom: "20px",
           left: "50%",
           transform: "translateX(-50%)",
-          background: "rgba(0,0,0,0.7)",
-          padding: "10px 18px",
           color: "#ff4dff",
-          borderRadius: 10,
-          border: "1px solid #ff4dff",
-          zIndex: 40,
           fontFamily: "monospace",
+          fontSize: "14px",
+          textAlign: "center",
+          background: "rgba(0, 0, 0, 0.7)",
+          padding: "15px 25px",
+          borderRadius: "10px",
+          border: "1px solid #ff4dff",
+          zIndex: 10,
         }}
       >
-        <div>Click to lock pointer • WASD / Arrows to move • Look at a door + get close to interact</div>
+        <div>🎮 WASD/Arrows: Move | 🖱️ Mouse: Look Around</div>
+        <div style={{ marginTop: "5px" }}>🚪 Face doors to enter classrooms</div>
+        <div style={{ marginTop: "5px", fontSize: "12px", opacity: 0.8 }}>
+          Explore the L-shaped hallway with multiple departments
+        </div>
+      </div>
+
+      {/* Map indicator */}
+      <div
+        style={{
+          position: "absolute",
+          top: "20px",
+          left: "20px",
+          background: "rgba(0, 0, 0, 0.7)",
+          border: "1px solid #ff4dff",
+          borderRadius: "8px",
+          padding: "10px",
+          color: "#ff4dff",
+          fontSize: "12px",
+          fontFamily: "monospace",
+          zIndex: 10,
+        }}
+      >
+        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>MAP</div>
+        <div>┌─────────────┐</div>
+        <div>│ L-Shaped    │</div>
+        <div>│   Wing →    │</div>
+        <div>│             │</div>
+        <div>│ Main Corridor</div>
+        <div>└─────────────┘</div>
       </div>
     </div>
   );
 }
-
-export default HallwaySceneFPS;
-
