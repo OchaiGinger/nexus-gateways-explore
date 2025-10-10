@@ -1,110 +1,277 @@
-"use client";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Stars, Environment } from "@react-three/drei";
-import * as THREE from "three";
 import { useState } from "react";
-import TutorPlayer from "./TutorPlayer";
+import { Canvas } from "@react-three/fiber";
+import { KeyboardControls, Stars } from "@react-three/drei";
+import * as THREE from "three";
+import { Camera } from "../Camera";
+import { TutorPlayer } from "./TutorPlayer";
 import { Door } from "./Door";
+import { Classroom } from "./Classroom";
 
-function Ground() {
+const keyboardMap = [
+  { name: "forward", keys: ["ArrowUp", "KeyW"] },
+  { name: "backward", keys: ["ArrowDown", "KeyS"] },
+  { name: "left", keys: ["ArrowLeft", "KeyA"] },
+  { name: "right", keys: ["ArrowRight", "KeyD"] },
+];
+
+const classrooms = [
+  { name: "Mathematics", position: [-6, 2, -20], inSession: true },
+  { name: "Physics", position: [6, 2, -20], inSession: false },
+  { name: "Computer Science", position: [-6, 2, -10], inSession: true },
+  { name: "Chemistry", position: [6, 2, -10], inSession: false },
+  { name: "Biology", position: [-6, 2, 0], inSession: true },
+  { name: "Literature", position: [6, 2, 0], inSession: false },
+  { name: "History", position: [-6, 2, 10], inSession: false },
+  { name: "Art & Design", position: [6, 2, 10], inSession: true },
+];
+
+function Hallway({ onDoorClick, nearDoorIndex }: { onDoorClick: (index: number) => void; nearDoorIndex: number | null }) {
   return (
-    <>
+    <group>
       {/* Floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[120, 12]} />
-        <meshStandardMaterial color="#808080" roughness={0.8} />
+        <planeGeometry args={[20, 60]} />
+        <meshStandardMaterial color="#0a0a1f" />
       </mesh>
 
-      {/* Ceiling */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 6, 0]}>
-        <planeGeometry args={[120, 12]} />
-        <meshStandardMaterial color="#aaaaaa" />
+      {/* Grid overlay */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <planeGeometry args={[20, 60, 20, 60]} />
+        <meshBasicMaterial color="#ff4dff" wireframe transparent opacity={0.1} />
       </mesh>
 
       {/* Walls */}
-      <mesh position={[0, 3, -6]}>
-        <boxGeometry args={[120, 6, 0.5]} />
-        <meshStandardMaterial color="#cccccc" />
+      {/* Left wall */}
+      <mesh position={[-10, 5, 0]} receiveShadow>
+        <boxGeometry args={[0.5, 10, 60]} />
+        <meshStandardMaterial color="#1a1a2e" />
       </mesh>
-      <mesh position={[0, 3, 6]}>
-        <boxGeometry args={[120, 6, 0.5]} />
-        <meshStandardMaterial color="#cccccc" />
+
+      {/* Right wall */}
+      <mesh position={[10, 5, 0]} receiveShadow>
+        <boxGeometry args={[0.5, 10, 60]} />
+        <meshStandardMaterial color="#1a1a2e" />
       </mesh>
+
+      {/* Back wall */}
+      <mesh position={[0, 5, -30]} receiveShadow>
+        <boxGeometry args={[20, 10, 0.5]} />
+        <meshStandardMaterial color="#1a1a2e" />
+      </mesh>
+
+      {/* Front wall */}
+      <mesh position={[0, 5, 30]} receiveShadow>
+        <boxGeometry args={[20, 10, 0.5]} />
+        <meshStandardMaterial color="#1a1a2e" />
+      </mesh>
+
+      {/* Ceiling */}
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 10, 0]}>
+        <planeGeometry args={[20, 60]} />
+        <meshStandardMaterial color="#050510" />
+      </mesh>
+
+      {/* Doors */}
+      {classrooms.map((classroom, index) => (
+        <Door
+          key={index}
+          position={classroom.position as [number, number, number]}
+          label={classroom.name}
+          isClassInSession={classroom.inSession}
+          onClick={() => onDoorClick(index)}
+        />
+      ))}
+
+      {/* Ceiling lights */}
+      {Array.from({ length: 8 }).map((_, i) => (
+        <pointLight
+          key={i}
+          position={[0, 9, -25 + i * 7]}
+          intensity={0.8}
+          distance={15}
+          color="#ff4dff"
+        />
+      ))}
+
+      {/* Ambient light */}
+      <ambientLight intensity={0.3} />
+      <directionalLight position={[10, 20, 10]} intensity={0.5} castShadow />
+    </group>
+  );
+}
+
+function Scene({ 
+  viewMode, 
+  selectedClassroom,
+  onDoorProximity,
+  nearDoorIndex
+}: { 
+  viewMode: 'hallway' | 'classroom';
+  selectedClassroom: number | null;
+  onDoorProximity: (index: number | null) => void;
+  nearDoorIndex: number | null;
+}) {
+  const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, 20));
+  const [cameraRotation, setCameraRotation] = useState(0);
+  const [, setNearDoor] = useState<number | null>(null);
+
+  const handleDoorProximity = (doorIndex: number | null) => {
+    setNearDoor(doorIndex);
+    onDoorProximity(doorIndex);
+  };
+
+  if (viewMode === 'classroom' && selectedClassroom !== null) {
+    return (
+      <>
+        <Stars radius={100} depth={50} count={2000} factor={4} saturation={0} fade speed={1} />
+        <Classroom roomName={classrooms[selectedClassroom].name} />
+        <TutorPlayer
+          onPositionChange={setPlayerPosition}
+          cameraRotation={cameraRotation}
+          onDoorProximity={handleDoorProximity}
+          doors={classrooms.map(c => ({ position: c.position as [number, number, number] }))}
+        />
+        <Camera target={playerPosition} onCameraRotation={setCameraRotation} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Stars radius={100} depth={50} count={2000} factor={4} saturation={0} fade speed={1} />
+      <Hallway 
+        onDoorClick={() => {}} 
+        nearDoorIndex={nearDoorIndex}
+      />
+      <TutorPlayer
+        onPositionChange={setPlayerPosition}
+        cameraRotation={cameraRotation}
+        onDoorProximity={handleDoorProximity}
+        doors={classrooms.map(c => ({ position: c.position as [number, number, number] }))}
+      />
+      <Camera target={playerPosition} onCameraRotation={setCameraRotation} />
     </>
   );
 }
 
 export function HallwayScene() {
-  const [doorStates, setDoorStates] = useState<{ [key: string]: boolean }>({});
+  const [viewMode, setViewMode] = useState<'hallway' | 'classroom'>('hallway');
+  const [selectedClassroom, setSelectedClassroom] = useState<number | null>(null);
+  const [nearDoorIndex, setNearDoorIndex] = useState<number | null>(null);
 
-  const toggleDoorState = (label: string) => {
-    setDoorStates((prev) => ({ ...prev, [label]: !prev[label] }));
+  const handleEnterClassroom = () => {
+    if (nearDoorIndex !== null) {
+      setSelectedClassroom(nearDoorIndex);
+      setViewMode('classroom');
+    }
   };
 
-  const doors = Array.from({ length: 6 }, (_, i) => {
-    const x = -25 + i * 10;
-    return [
-      {
-        position: [x, 1.2, -5.75] as [number, number, number], // lowered door
-        label: `Room ${i * 2 + 1}`,
-        rotationY: Math.PI / 2,
-      },
-      {
-        position: [x, 1.2, 5.75] as [number, number, number],
-        label: `Room ${i * 2 + 2}`,
-        rotationY: -Math.PI / 2,
-      },
-    ];
-  }).flat();
+  const handleExitClassroom = () => {
+    setViewMode('hallway');
+    setSelectedClassroom(null);
+  };
 
   return (
-    <div className="w-full h-screen">
-      <Canvas shadows camera={{ position: [0, 2, 10], fov: 70 }}>
-        {/* Lights */}
-        <ambientLight intensity={0.4} />
-        <directionalLight position={[10, 15, 10]} intensity={1.2} castShadow />
-        <pointLight position={[0, 5, 0]} intensity={0.3} />
+    <div style={{ width: "100vw", height: "100vh", position: "fixed", top: 0, left: 0 }}>
+      <KeyboardControls map={keyboardMap}>
+        <Canvas shadows camera={{ position: [0, 5, 25], fov: 75 }}>
+          <Scene 
+            viewMode={viewMode} 
+            selectedClassroom={selectedClassroom}
+            onDoorProximity={setNearDoorIndex}
+            nearDoorIndex={nearDoorIndex}
+          />
+        </Canvas>
+      </KeyboardControls>
 
-        <fog attach="fog" args={["#111111", 10, 150]} />
+      {/* Door proximity indicator */}
+      {nearDoorIndex !== null && viewMode === 'hallway' && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "rgba(0, 0, 0, 0.8)",
+            border: "2px solid #ff4dff",
+            borderRadius: "15px",
+            padding: "20px 40px",
+            color: "#ff4dff",
+            fontSize: "1.5rem",
+            fontWeight: "bold",
+            textAlign: "center",
+            zIndex: 100,
+            boxShadow: "0 0 30px rgba(255, 77, 255, 0.5)",
+          }}
+        >
+          <div style={{ marginBottom: "8px" }}>
+            🚪 {classrooms[nearDoorIndex].name}
+          </div>
+          <div style={{ fontSize: "1rem", opacity: 0.8, fontWeight: "normal", marginBottom: "10px" }}>
+            {classrooms[nearDoorIndex].inSession ? "🟢 Class in Session" : "🔴 Available"}
+          </div>
+          <button
+            onClick={handleEnterClassroom}
+            style={{
+              background: "#ff4dff",
+              color: "#000",
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: "8px",
+              fontSize: "1rem",
+              fontWeight: "bold",
+              cursor: "pointer",
+            }}
+          >
+            Press to Enter
+          </button>
+        </div>
+      )}
 
-        <Stars radius={80} depth={40} count={3000} factor={3} saturation={0} fade speed={1} />
-        <Environment preset="warehouse" />
+      {/* Exit classroom button */}
+      {viewMode === 'classroom' && (
+        <button
+          onClick={handleExitClassroom}
+          style={{
+            position: "absolute",
+            top: "20px",
+            right: "20px",
+            background: "#ff4dff",
+            color: "#000",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            fontSize: "1rem",
+            fontWeight: "bold",
+            cursor: "pointer",
+            zIndex: 100,
+          }}
+        >
+          Exit Classroom
+        </button>
+      )}
 
-        <Ground />
-
-        {/* Doors */}
-        {doors.map((door, i) => (
-          <group key={i} rotation={[0, door.rotationY, 0]}>
-            <Door
-              position={door.position}
-              label={door.label}
-              isClassInSession={doorStates[door.label] ?? false}
-              onClick={() => toggleDoorState(door.label)}
-            />
-          </group>
-        ))}
-
-        {/* TutorPlayer */}
-        <TutorPlayer
-          portals={[]} // no portals in hallway
-          onPositionChange={() => {}}
-          onPortalProximity={() => {}}
-          onPortalEnter={() => {}}
-        />
-
-        <OrbitControls
-          enablePan={false}
-          enableZoom={true}
-          minDistance={4}
-          maxDistance={10}
-          maxPolarAngle={Math.PI / 2.1}
-        />
-      </Canvas>
+      {/* Controls overlay */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          color: "#ff4dff",
+          fontFamily: "monospace",
+          fontSize: "14px",
+          textAlign: "center",
+          background: "rgba(0, 0, 0, 0.7)",
+          padding: "15px 25px",
+          borderRadius: "10px",
+          border: "1px solid #ff4dff",
+          zIndex: 10,
+        }}
+      >
+        <div>🎮 WASD/Arrows: Move | 🖱️ Mouse: Rotate Camera</div>
+        <div style={{ marginTop: "5px" }}>🚪 Approach doors to enter classrooms</div>
+      </div>
     </div>
   );
 }
-
-
-
-
-
