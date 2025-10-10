@@ -3,7 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stars, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { useState } from "react";
-import { TutorPlayer } from "./TutorPlayer";
+import TutorPlayer from "./TutorPlayer";
 import { Door } from "./Door";
 
 function Ground() {
