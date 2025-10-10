@@ -4,7 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text, Stars, OrbitControls } from "@react-three/drei";
 
 /**
- * Enhanced HallwayScene with better styling and properly positioned doors
+ * Fixed HallwayScene - Removed gradient background and ensured 3D scene renders
  */
 
 // -----------------------------
@@ -39,10 +39,9 @@ const BRANCH_AREA = { minX: 9.5, maxX: 30.5, minZ: -20, maxZ: 4, minY: 0, maxY: 
 const DOOR_THICKNESS = 0.15;
 const DOOR_WIDTH = 1.8;
 const DOOR_HEIGHT = 2.4;
-const DOOR_FRAME_WIDTH = 0.1;
 
 // -----------------------------
-// Enhanced Door component
+// Simple Door component
 // -----------------------------
 
 function Door({
@@ -58,12 +57,6 @@ function Door({
 
   return (
     <group position={worldPosition} rotation={[0, rotationY, 0]}>
-      {/* Door frame */}
-      <mesh position={[0, DOOR_HEIGHT / 2 + 0.1, 0]} castShadow receiveShadow>
-        <boxGeometry args={[DOOR_THICKNESS + 0.05, DOOR_HEIGHT + 0.2, DOOR_WIDTH + 0.1]} />
-        <meshStandardMaterial color="#2a2a2a" metalness={0.3} roughness={0.7} />
-      </mesh>
-
       {/* Door slab */}
       <mesh
         position={[0, DOOR_HEIGHT / 2, 0]}
@@ -88,42 +81,25 @@ function Door({
         <meshStandardMaterial color="#cccccc" metalness={0.8} roughness={0.2} />
       </mesh>
 
-      {/* Session status indicator */}
-      <mesh position={[0, DOOR_HEIGHT + 0.15, 0]} castShadow>
-        <sphereGeometry args={[0.08, 8, 8]} />
-        <meshStandardMaterial 
-          color={info.isInSession ? "#00ff88" : "#ff4444"}
-          emissive={info.isInSession ? "#00ff88" : "#ff4444"}
-          emissiveIntensity={0.3}
-        />
-      </mesh>
+      {/* Door label */}
+      <Text
+        position={[0, DOOR_HEIGHT + 0.5, 0]}
+        fontSize={0.15}
+        anchorX="center"
+        anchorY="middle"
+        color="#ffffff"
+      >
+        {info.label}
+      </Text>
 
-      {/* Door label with background */}
-      <group position={[0, DOOR_HEIGHT + 0.5, 0]}>
-        <mesh position={[0, 0, -0.01]}>
-          <planeGeometry args={[1.8, 0.3]} />
-          <meshBasicMaterial color="#000000" transparent opacity={0.7} />
-        </mesh>
-        <Text
-          fontSize={0.15}
-          anchorX="center"
-          anchorY="middle"
-          color="#ffffff"
-          font="/fonts/helvetiker_regular.typeface.json"
-        >
-          {info.label}
-        </Text>
-      </group>
-
-      {/* Hover glow effect */}
+      {/* Hover indicator */}
       {hovered && (
-        <mesh position={[0, DOOR_HEIGHT / 2, 0]}>
-          <boxGeometry args={[DOOR_THICKNESS + 0.1, DOOR_HEIGHT + 0.1, DOOR_WIDTH + 0.1]} />
-          <meshBasicMaterial 
-            color="#ff4dff" 
-            transparent 
-            opacity={0.2}
-            side={THREE.BackSide}
+        <mesh position={[0, DOOR_HEIGHT / 2, DOOR_WIDTH / 2 + 0.1]}>
+          <sphereGeometry args={[0.1, 8, 8]} />
+          <meshStandardMaterial 
+            color="#ff4dff"
+            emissive="#ff4dff"
+            emissiveIntensity={0.5}
           />
         </mesh>
       )}
@@ -132,7 +108,7 @@ function Door({
 }
 
 // -----------------------------
-// Enhanced Hallway with better styling
+// Simple Hallway
 // -----------------------------
 
 function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex }: { 
@@ -142,201 +118,77 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex }: {
 }) {
   return (
     <group>
-      {/* Enhanced Main floor with texture pattern */}
+      {/* Main floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[20, 60, 20, 60]} />
-        <meshStandardMaterial 
-          color="#0a0a2a"
-          metalness={0.1}
-          roughness={0.8}
-        />
-      </mesh>
-
-      {/* Floor pattern overlay */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-        <planeGeometry args={[20, 60, 20, 60]} />
-        <meshBasicMaterial 
-          color="#1a1a4a" 
-          wireframe 
-          transparent 
-          opacity={0.1}
-        />
+        <planeGeometry args={[20, 60]} />
+        <meshStandardMaterial color="#0a0a2a" />
       </mesh>
 
       {/* L-branch floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[19.75, 0, -8]} receiveShadow>
-        <planeGeometry args={[22, 24, 22, 24]} />
-        <meshStandardMaterial color="#071038" metalness={0.1} roughness={0.8} />
+        <planeGeometry args={[22, 24]} />
+        <meshStandardMaterial color="#071038" />
       </mesh>
 
-      {/* L-branch floor pattern */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[19.75, 0.01, -8]}>
-        <planeGeometry args={[22, 24, 22, 24]} />
-        <meshBasicMaterial color="#1a1a4a" wireframe transparent opacity={0.1} />
-      </mesh>
-
-      {/* Baseboards/Trim */}
-      <mesh position={[-9.75, 0.1, 0]} receiveShadow>
-        <boxGeometry args={[0.1, 0.2, 60]} />
-        <meshStandardMaterial color="#3a3a5a" metalness={0.2} roughness={0.6} />
-      </mesh>
-      <mesh position={[9.75, 0.1, 0]} receiveShadow>
-        <boxGeometry args={[0.1, 0.2, 60]} />
-        <meshStandardMaterial color="#3a3a5a" metalness={0.2} roughness={0.6} />
-      </mesh>
-
-      {/* Enhanced Main corridor walls with texture */}
-      <mesh position={[-10, 5, 0]} receiveShadow castShadow>
+      {/* Main corridor walls */}
+      <mesh position={[-10, 5, 0]} receiveShadow>
         <boxGeometry args={[0.5, 10, 60]} />
-        <meshStandardMaterial 
-          color="#1a1a3a" 
-          metalness={0.1}
-          roughness={0.7}
-        />
+        <meshStandardMaterial color="#1a1a3a" />
       </mesh>
-      <mesh position={[10, 5, 0]} receiveShadow castShadow>
+      <mesh position={[10, 5, 0]} receiveShadow>
         <boxGeometry args={[0.5, 10, 60]} />
-        <meshStandardMaterial 
-          color="#1a1a3a"
-          metalness={0.1}
-          roughness={0.7}
-        />
+        <meshStandardMaterial color="#1a1a3a" />
       </mesh>
 
-      {/* Enhanced Branch walls */}
-      <mesh position={[19.75, 5, -20]} receiveShadow castShadow>
+      {/* Branch walls */}
+      <mesh position={[19.75, 5, -20]} receiveShadow>
         <boxGeometry args={[22, 10, 0.5]} />
-        <meshStandardMaterial color="#1a1a3a" metalness={0.1} roughness={0.7} />
+        <meshStandardMaterial color="#1a1a3a" />
       </mesh>
-      <mesh position={[30.5, 5, -8]} receiveShadow castShadow>
+      <mesh position={[30.5, 5, -8]} receiveShadow>
         <boxGeometry args={[0.5, 10, 24]} />
-        <meshStandardMaterial color="#1a1a3a" metalness={0.1} roughness={0.7} />
+        <meshStandardMaterial color="#1a1a3a" />
       </mesh>
-      <mesh position={[10, 5, -8]} receiveShadow castShadow>
+      <mesh position={[10, 5, -8]} receiveShadow>
         <boxGeometry args={[0.5, 10, 24]} />
-        <meshStandardMaterial color="#16214a" metalness={0.1} roughness={0.7} />
+        <meshStandardMaterial color="#16214a" />
       </mesh>
 
       {/* Ceiling */}
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 10, 0]} receiveShadow>
         <planeGeometry args={[20, 60]} />
-        <meshStandardMaterial color="#050520" metalness={0.05} roughness={0.9} />
+        <meshStandardMaterial color="#050520" />
       </mesh>
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[19.75, 10, -8]} receiveShadow>
         <planeGeometry args={[22, 24]} />
-        <meshStandardMaterial color="#050520" metalness={0.05} roughness={0.9} />
+        <meshStandardMaterial color="#050520" />
       </mesh>
 
-      {/* Ceiling grid pattern */}
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 9.99, 0]}>
-        <planeGeometry args={[20, 60, 20, 60]} />
-        <meshBasicMaterial color="#3a3a8a" wireframe transparent opacity={0.05} />
-      </mesh>
-
-      {/* Enhanced Lighting - Ceiling light fixtures */}
-      {Array.from({ length: 12 }).map((_, i) => {
-        const zPos = -28 + i * 5;
-        if (zPos <= 30) {
-          return (
-            <group key={`main-${i}`} position={[0, 9.5, zPos]}>
-              <pointLight intensity={0.8} distance={15} color="#4a4aff" />
-              <mesh castShadow>
-                <cylinderGeometry args={[0.3, 0.4, 0.1, 16]} />
-                <meshStandardMaterial 
-                  color="#ffffff" 
-                  emissive="#4a4aff" 
-                  emissiveIntensity={0.3}
-                  metalness={0.8}
-                  roughness={0.2}
-                />
-              </mesh>
-              {/* Light cone */}
-              <mesh rotation={[Math.PI, 0, 0]} position={[0, -0.3, 0]}>
-                <cylinderGeometry args={[0.5, 1.5, 1, 16]} />
-                <meshBasicMaterial 
-                  color="#4a4aff" 
-                  transparent 
-                  opacity={0.1}
-                  side={THREE.DoubleSide}
-                />
-              </mesh>
-            </group>
-          );
-        }
-        return null;
-      })}
-
-      {/* Branch lighting */}
-      {Array.from({ length: 6 }).map((_, i) => {
-        const xPos = 11 + i * 4;
-        return (
-          <group key={`branch-${i}`} position={[xPos, 9.5, -8]}>
-            <pointLight intensity={0.6} distance={12} color="#4a4aff" />
-            <mesh castShadow>
-              <cylinderGeometry args={[0.25, 0.35, 0.1, 16]} />
-              <meshStandardMaterial 
-                color="#ffffff" 
-                emissive="#4a4aff" 
-                emissiveIntensity={0.3}
-                metalness={0.8}
-                roughness={0.2}
-              />
-            </mesh>
-          </group>
-        );
-      })}
-
-      {/* Emergency exit signs */}
-      <group position={[0, 8, -29]}>
-        <mesh position={[0, 0, 0.1]}>
-          <boxGeometry args={[1, 0.3, 0.05]} />
-          <meshStandardMaterial color="#ff4444" emissive="#ff4444" emissiveIntensity={0.5} />
-        </mesh>
-        <Text position={[0, 0, 0.12]} fontSize={0.15} color="#ffffff" anchorX="center" anchorY="middle">
-          EXIT
-        </Text>
-      </group>
-
-      {/* Direction signs */}
-      <group position={[0, 7, 0]}>
-        <Text fontSize={0.4} color="#00ffff" anchorX="center" anchorY="middle">
-          ACADEMIC WING
-        </Text>
-        <Text position={[0, -0.5, 0]} fontSize={0.2} color="#ff4dff" anchorX="center" anchorY="middle">
-          Departments A-L
-        </Text>
-      </group>
+      {/* Simple lighting */}
+      {Array.from({ length: 8 }).map((_, i) => (
+        <pointLight
+          key={i}
+          position={[0, 9, -25 + i * 7]}
+          intensity={0.8}
+          distance={15}
+          color="#4a4aff"
+        />
+      ))}
 
       {/* Doors */}
       {doorWorldInfos.map((d) => (
         <Door key={d.index} info={d} onClick={onDoorClick} hovered={nearDoorIndex === d.index} />
       ))}
 
-      {/* Additional ambient lighting */}
-      <ambientLight intensity={0.4} color="#1a1a4a" />
-      <directionalLight 
-        position={[20, 30, 20]} 
-        intensity={0.6} 
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-far={50}
-        shadow-camera-left={-25}
-        shadow-camera-right={25}
-        shadow-camera-top={25}
-        shadow-camera-bottom={-25}
-      />
-      <hemisphereLight 
-        skyColor="#1a1a4a" 
-        groundColor="#050515" 
-        intensity={0.3} 
-      />
+      {/* Basic lighting */}
+      <ambientLight intensity={0.4} />
+      <directionalLight position={[20, 30, 20]} intensity={0.6} castShadow />
     </group>
   );
 }
 
 // -----------------------------
-// TutorPlayer (FPS) - Same as before but kept for completeness
+// TutorPlayer (FPS)
 // -----------------------------
 
 function TutorPlayer({
@@ -492,7 +344,7 @@ function TutorPlayer({
 }
 
 // -----------------------------
-// Main Enhanced Scene
+// Main Scene - Fixed
 // -----------------------------
 
 export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (index: number) => void }) {
@@ -502,7 +354,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
 
     const side = Math.abs(xRaw) >= Math.abs(zRaw) ? (xRaw < 0 ? "left" : "right") : (zRaw < 0 ? "back" : "front");
 
-    let worldPos: [number, number, number] = [xRaw, DOOR_HEIGHT / 2, zRaw]; // Centered on door height
+    let worldPos: [number, number, number] = [xRaw, DOOR_HEIGHT / 2, zRaw];
     let rotationY = 0;
 
     if (side === "left") {
@@ -539,12 +391,17 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       width: "100vw", 
       height: "100vh", 
       position: "fixed", 
-      inset: 0,
-      background: "linear-gradient(135deg, #0a0a2a 0%, #1a1a4a 50%, #0a0a1a 100%)"
+      top: 0, 
+      left: 0,
+      background: "#000000" // Simple black background instead of gradient
     }}>
-      <Canvas shadows camera={{ position: [0, 1.6, 20], fov: 75 }}>
-        <fog attach="fog" args={["#0a0a2a", 5, 50]} />
-        <Stars radius={100} depth={50} count={3000} factor={6} saturation={0.2} fade speed={2} />
+      <Canvas 
+        shadows 
+        camera={{ position: [0, 1.6, 20], fov: 75 }}
+        gl={{ antialias: true }}
+      >
+        <fog attach="fog" args={["#000015", 10, 50]} />
+        <Stars radius={100} depth={50} count={2000} factor={4} saturation={0} fade speed={1} />
 
         <Hallway 
           onDoorClick={handleDoorClick} 
@@ -571,7 +428,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
         />
       </Canvas>
 
-      {/* Enhanced HUD overlay */}
+      {/* Simple HUD overlay */}
       {nearDoorIndex !== null && (
         <div
           style={{
@@ -579,118 +436,57 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            background: "linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(26,26,74,0.9) 100%)",
-            color: "#ffffff",
+            background: "rgba(0, 0, 0, 0.8)",
+            color: "#ff4dff",
             padding: "20px 30px",
-            borderRadius: "15px",
+            borderRadius: "10px",
             border: "2px solid #ff4dff",
             zIndex: 50,
             textAlign: "center",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 0 30px rgba(255, 77, 255, 0.3)",
-            minWidth: "250px"
           }}
         >
-          <div style={{ 
-            fontSize: "1.4rem", 
-            fontWeight: 700,
-            background: "linear-gradient(45deg, #ff4dff, #00ffff)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            marginBottom: "8px"
-          }}>
+          <div style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "10px" }}>
             {classroomsInput[nearDoorIndex].label}
           </div>
-          <div style={{ 
-            marginTop: 6, 
-            opacity: 0.9,
-            fontSize: "1rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px"
-          }}>
-            <div style={{
-              width: "12px",
-              height: "12px",
-              borderRadius: "50%",
-              background: classroomsInput[nearDoorIndex].isInSession ? "#00ff88" : "#ff4444",
-              boxShadow: `0 0 10px ${classroomsInput[nearDoorIndex].isInSession ? "#00ff88" : "#ff4444"}`
-            }}></div>
-            {classroomsInput[nearDoorIndex].isInSession ? "Class in Session" : "Available"}
+          <div style={{ marginBottom: "15px", fontSize: "1rem" }}>
+            {classroomsInput[nearDoorIndex].isInSession ? "🟢 Class in Session" : "🔴 Available"}
           </div>
-          <div style={{ marginTop: 15 }}>
-            <button
-              onClick={() => handleDoorClick(nearDoorIndex)}
-              style={{ 
-                padding: "10px 20px", 
-                borderRadius: "10px", 
-                border: "none", 
-                background: "linear-gradient(45deg, #ff4dff, #00ffff)",
-                color: "#000", 
-                fontWeight: 700,
-                fontSize: "1rem",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                boxShadow: "0 0 15px rgba(255, 77, 255, 0.5)"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "scale(1.05)";
-                e.currentTarget.style.boxShadow = "0 0 20px rgba(255, 77, 255, 0.8)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "scale(1)";
-                e.currentTarget.style.boxShadow = "0 0 15px rgba(255, 77, 255, 0.5)";
-              }}
-            >
-              Enter Classroom
-            </button>
-          </div>
+          <button
+            onClick={() => handleDoorClick(nearDoorIndex)}
+            style={{
+              padding: "10px 20px",
+              borderRadius: "8px",
+              border: "none",
+              background: "#ff4dff",
+              color: "#000",
+              fontWeight: 700,
+              fontSize: "1rem",
+              cursor: "pointer",
+            }}
+          >
+            Enter Classroom
+          </button>
         </div>
       )}
 
-      {/* Enhanced controls hint */}
+      {/* Simple controls hint */}
       <div
         style={{
           position: "absolute",
-          bottom: "25px",
+          bottom: "20px",
           left: "50%",
           transform: "translateX(-50%)",
-          background: "linear-gradient(135deg, rgba(0,0,0,0.8) 0%, rgba(26,26,74,0.8) 100%)",
-          padding: "12px 25px",
+          background: "rgba(0, 0, 0, 0.7)",
+          padding: "10px 20px",
           color: "#00ffff",
-          borderRadius: "12px",
+          borderRadius: "8px",
           border: "1px solid #00ffff",
           zIndex: 40,
           fontFamily: "monospace",
           fontSize: "14px",
-          backdropFilter: "blur(5px)",
-          boxShadow: "0 0 20px rgba(0, 255, 255, 0.2)"
         }}
       >
-        <div>🖱️ Click + Drag to look • 🎮 WASD to move • 🚪 Look at doors to interact</div>
-      </div>
-
-      {/* Location indicator */}
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          left: "20px",
-          background: "linear-gradient(135deg, rgba(0,0,0,0.8) 0%, rgba(26,26,74,0.8) 100%)",
-          border: "1px solid #ff4dff",
-          borderRadius: "10px",
-          padding: "12px 18px",
-          color: "#ff4dff",
-          fontSize: "14px",
-          fontFamily: "monospace",
-          zIndex: 10,
-          backdropFilter: "blur(5px)"
-        }}
-      >
-        <div style={{ fontWeight: "bold", marginBottom: "5px" }}>ACADEMIC WING</div>
-        <div>📍 10 Classrooms</div>
-        <div>🎯 L-Shaped Layout</div>
+        <div>Click + Drag to look • WASD to move • Look at doors to interact</div>
       </div>
     </div>
   );
