@@ -1,8 +1,7 @@
-import { useRef, useEffect } from "react";
-import { useFrame, useLoader } from "@react-three/fiber";
+import { useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls } from "@react-three/drei";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
 interface Portal {
   position: [number, number, number];
@@ -18,107 +17,88 @@ interface PlayerProps {
   onPortalEnter?: (route: string, label: string) => void;
 }
 
-export function Player({
-  onPositionChange,
-  portals,
-  walls = [],
-  onPortalProximity,
-  onPortalEnter,
-}: PlayerProps) {
-  const groupRef = useRef<THREE.Group>(null);
+export function Player({ onPositionChange, portals, walls = [], onPortalProximity, onPortalEnter }: PlayerProps) {
+  const meshRef = useRef<THREE.Mesh>(null);
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
   const lastPortalCheck = useRef(0);
   const nearPortal = useRef<string | null>(null);
 
+  // Get keyboard controls
   const forward = useKeyboardControls((state) => state.forward);
   const backward = useKeyboardControls((state) => state.backward);
   const left = useKeyboardControls((state) => state.left);
   const right = useKeyboardControls((state) => state.right);
 
-  // ✅ Load local Mixamo model
-  const gltf = useLoader(GLTFLoader, "/models/character.glb");
-
-  useEffect(() => {
-    if (gltf && groupRef.current) {
-      gltf.scene.scale.set(1.5, 1.5, 1.5);
-      gltf.scene.position.set(0, 0, 0);
-      groupRef.current.add(gltf.scene);
-    }
-  }, [gltf]);
-
   useFrame((state, delta) => {
-    if (!groupRef.current) return;
+    if (!meshRef.current) return;
 
+    // Reset direction
     direction.current.set(0, 0, 0);
+
+    // Calculate movement direction
     if (forward) direction.current.z -= 1;
     if (backward) direction.current.z += 1;
     if (left) direction.current.x -= 1;
     if (right) direction.current.x += 1;
 
-    // Smooth movement
-    const speed = 8;
+    // Normalize and apply speed
     if (direction.current.length() > 0) {
       direction.current.normalize();
-      velocity.current.lerp(direction.current.multiplyScalar(speed), 0.15);
-
-      // Rotate player
-      const targetAngle = Math.atan2(direction.current.x, direction.current.z);
-      groupRef.current.rotation.y = THREE.MathUtils.lerpAngle(
-        groupRef.current.rotation.y,
-        targetAngle,
-        0.15
-      );
+      velocity.current.lerp(direction.current.multiplyScalar(5), 0.1);
     } else {
       velocity.current.lerp(new THREE.Vector3(), 0.1);
     }
 
-    const newX = groupRef.current.position.x + velocity.current.x * delta;
-    const newZ = groupRef.current.position.z + velocity.current.z * delta;
+    // Calculate new position
+    const newX = meshRef.current.position.x + velocity.current.x * delta;
+    const newZ = meshRef.current.position.z + velocity.current.z * delta;
 
-    // Collision detection
+    // Wall collision detection
     let collided = false;
     for (const wall of walls) {
-      const halfW = wall.width / 2;
-      const halfD = wall.depth / 2;
-      const buffer = 1;
+      const halfWidth = wall.width / 2;
+      const halfDepth = wall.depth / 2;
+      const buffer = 1; // Collision buffer
+
       if (
-        newX > wall.position[0] - halfW - buffer &&
-        newX < wall.position[0] + halfW + buffer &&
-        newZ > wall.position[2] - halfD - buffer &&
-        newZ < wall.position[2] + halfD + buffer
+        newX > wall.position[0] - halfWidth - buffer &&
+        newX < wall.position[0] + halfWidth + buffer &&
+        newZ > wall.position[2] - halfDepth - buffer &&
+        newZ < wall.position[2] + halfDepth + buffer
       ) {
         collided = true;
         break;
       }
     }
 
+    // Update position if no collision
     if (!collided) {
-      groupRef.current.position.x = newX;
-      groupRef.current.position.z = newZ;
+      meshRef.current.position.x = newX;
+      meshRef.current.position.z = newZ;
     }
 
-    // ✅ Smooth TPS camera follow
-    const camOffset = new THREE.Vector3(0, 3, 6);
-    const rotatedOffset = camOffset
-      .clone()
-      .applyAxisAngle(new THREE.Vector3(0, 1, 0), groupRef.current.rotation.y);
-    const camPos = groupRef.current.position.clone().add(rotatedOffset);
+    // Rotate torus for visual effect
+    meshRef.current.rotation.x += delta * 0.5;
+    meshRef.current.rotation.y += delta * 0.3;
 
-    state.camera.position.lerp(camPos, 0.1);
-    state.camera.lookAt(groupRef.current.position);
-
-    // ✅ Portal proximity & interaction
+    // Check portal proximity and collisions
     const currentTime = state.clock.elapsedTime;
     let closestPortal: string | null = null;
     let shouldEnter = false;
     let enterPortal: Portal | null = null;
 
     for (const portal of portals) {
-      const distance = groupRef.current.position.distanceTo(
-        new THREE.Vector3(...portal.position)
+      const distance = meshRef.current.position.distanceTo(
+        new THREE.Vector3(portal.position[0], portal.position[1], portal.position[2])
       );
-      if (distance < 5 && !closestPortal) closestPortal = portal.label;
+      
+      // Show proximity indicator when within 5 units
+      if (distance < 5 && !closestPortal) {
+        closestPortal = portal.label;
+      }
+
+      // Enter portal when within 2.5 units (with cooldown)
       if (distance < 2.5 && currentTime - lastPortalCheck.current > 1.5) {
         shouldEnter = true;
         enterPortal = portal;
@@ -127,17 +107,35 @@ export function Player({
       }
     }
 
+    // Update proximity indicator
     if (closestPortal !== nearPortal.current) {
       nearPortal.current = closestPortal;
-      onPortalProximity?.(closestPortal);
+      if (onPortalProximity) {
+        onPortalProximity(closestPortal);
+      }
     }
 
-    if (shouldEnter && enterPortal) {
-      onPortalEnter?.(enterPortal.route, enterPortal.label);
+    // Trigger portal entry with delay
+    if (shouldEnter && enterPortal && onPortalEnter) {
+      onPortalEnter(enterPortal.route, enterPortal.label);
     }
 
-    onPositionChange?.(groupRef.current.position);
+    // Notify parent of position change
+    if (onPositionChange) {
+      onPositionChange(meshRef.current.position);
+    }
   });
 
-  return <group ref={groupRef} position={[0, 0, 0]} />;
+  return (
+    <mesh ref={meshRef} position={[0, 1, 0]} castShadow>
+      <torusGeometry args={[0.5, 0.2, 16, 32]} />
+      <meshStandardMaterial
+        color="#00ffff"
+        emissive="#00ffff"
+        emissiveIntensity={0.5}
+        metalness={0.8}
+        roughness={0.2}
+      />
+    </mesh>
+  );
 }

@@ -1,117 +1,226 @@
-"use client";
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { OrbitControls, Html } from "@react-three/drei";
+import { useRef, useState } from "react";
+import { Canvas } from "@react-three/fiber";
+import { KeyboardControls, Stars } from "@react-three/drei";
+import { useNavigate } from "react-router-dom";
+import { Player } from "./Player";
+import { Portal } from "./Portal";
+import { Camera } from "./Camera";
+import { Wall } from "./Wall";
+import { PortalTransition } from "./PortalTransition";
 import * as THREE from "three";
-import { Suspense, useRef, useEffect } from "react";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
-function Player() {
-  const groupRef = useRef<THREE.Group>(null);
-  const velocity = useRef(new THREE.Vector3());
-  const direction = useRef(new THREE.Vector3());
-  const forward = useRef(false);
-  const backward = useRef(false);
-  const left = useRef(false);
-  const right = useRef(false);
+const keyboardMap = [
+  { name: "forward", keys: ["ArrowUp", "KeyW"] },
+  { name: "backward", keys: ["ArrowDown", "KeyS"] },
+  { name: "left", keys: ["ArrowLeft", "KeyA"] },
+  { name: "right", keys: ["ArrowRight", "KeyD"] },
+];
 
-  // ✅ Load locally stored Mixamo character
-  const gltf = useLoader(GLTFLoader, "/models/character.glb");
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "w") forward.current = true;
-      if (e.key === "s") backward.current = true;
-      if (e.key === "a") left.current = true;
-      if (e.key === "d") right.current = true;
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "w") forward.current = false;
-      if (e.key === "s") backward.current = false;
-      if (e.key === "a") left.current = false;
-      if (e.key === "d") right.current = false;
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (gltf && groupRef.current) {
-      gltf.scene.scale.set(0.01, 0.01, 0.01); // adjust if needed
-      gltf.scene.position.set(0, 1, 0);
-      groupRef.current.add(gltf.scene);
-    }
-  }, [gltf]);
-
-  useFrame((state, delta) => {
-    if (!groupRef.current) return;
-
-    direction.current.set(0, 0, 0);
-    if (forward.current) direction.current.z -= 1;
-    if (backward.current) direction.current.z += 1;
-    if (left.current) direction.current.x -= 1;
-    if (right.current) direction.current.x += 1;
-
-    const speed = 6;
-    if (direction.current.length() > 0) {
-      direction.current.normalize();
-      velocity.current.lerp(direction.current.multiplyScalar(speed), 0.15);
-
-      const targetAngle = Math.atan2(direction.current.x, direction.current.z);
-      groupRef.current.rotation.y = THREE.MathUtils.lerpAngle(
-        groupRef.current.rotation.y,
-        targetAngle,
-        0.2
-      );
-    } else {
-      velocity.current.lerp(new THREE.Vector3(), 0.1);
-    }
-
-    groupRef.current.position.x += velocity.current.x * delta;
-    groupRef.current.position.z += velocity.current.z * delta;
-
-    const camOffset = new THREE.Vector3(0, 3, 6);
-    const rotatedOffset = camOffset.clone().applyAxisAngle(
-      new THREE.Vector3(0, 1, 0),
-      groupRef.current.rotation.y
-    );
-    const camPos = groupRef.current.position.clone().add(rotatedOffset);
-    state.camera.position.lerp(camPos, 0.1);
-    state.camera.lookAt(groupRef.current.position);
-  });
-
-  return <group ref={groupRef} position={[0, 0, 0]} />;
-}
-
-function Scene() {
+function Ground() {
   return (
     <>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 10, 5]} intensity={1.2} castShadow />
-      <hemisphereLight intensity={0.6} />
-
-      <Suspense fallback={<Html center>Loading Character...</Html>}>
-        <Player />
-      </Suspense>
-
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#5f8260" />
+      {/* Main ground */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[200, 200, 50, 50]} />
+        <meshStandardMaterial
+          color="#0a0a1f"
+          metalness={0.3}
+          roughness={0.7}
+          wireframe={false}
+        />
       </mesh>
 
-      <OrbitControls />
+      {/* Grid overlay */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <planeGeometry args={[200, 200, 40, 40]} />
+        <meshBasicMaterial
+          color="#00ffff"
+          wireframe={true}
+          transparent
+          opacity={0.1}
+        />
+      </mesh>
+
+      {/* Additional ground planes for depth */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
+        <planeGeometry args={[220, 220]} />
+        <meshStandardMaterial color="#050510" />
+      </mesh>
+    </>
+  );
+}
+
+function Lights() {
+  return (
+    <>
+      <ambientLight intensity={0.3} />
+      <directionalLight
+        position={[10, 20, 10]}
+        intensity={1}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+      />
+      <pointLight position={[0, 10, 0]} intensity={0.5} color="#00ffff" />
+    </>
+  );
+}
+
+const portals = [
+  { position: [10, 2, -15] as [number, number, number], color: "#00d4ff", label: "Exams Portal", route: "/exams" },
+  { position: [-15, 2, -10] as [number, number, number], color: "#b84dff", label: "Library Portal", route: "/library" },
+  { position: [15, 2, 5] as [number, number, number], color: "#00ff88", label: "Campus Map", route: "/campus" },
+  { position: [-12, 2, 8] as [number, number, number], color: "#ff9500", label: "3D Store", route: "/store" },
+  { position: [0, 2, -25] as [number, number, number], color: "#ff4dff", label: "AI Tutor", route: "/ai-tutor" },
+  { position: [20, 2, -5] as [number, number, number], color: "#ffff00", label: "Project Writer", route: "/project-writer" },
+  { position: [-20, 2, -5] as [number, number, number], color: "#8a4dff", label: "Study Room", route: "/study-room" },
+  { position: [0, 2, 15] as [number, number, number], color: "#00d4ff", label: "I Seek", route: "/seek" },
+];
+
+const walls = [
+  { position: [0, 3, -40] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], width: 100, height: 6, depth: 1 },
+  { position: [0, 3, 40] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], width: 100, height: 6, depth: 1 },
+  { position: [-40, 3, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], width: 80, height: 6, depth: 1 },
+  { position: [40, 3, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], width: 80, height: 6, depth: 1 },
+];
+
+const wallCollisions = walls.map(wall => ({
+  position: wall.position,
+  width: wall.rotation[1] === 0 ? wall.width : 1,
+  depth: wall.rotation[1] === 0 ? 1 : wall.width,
+}));
+
+function Scene({ onPortalProximity, onPortalEnter }: { onPortalProximity: (name: string | null) => void; onPortalEnter: (route: string, label: string) => void }) {
+  const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, 0));
+
+  return (
+    <>
+      <Lights />
+      <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+      <Ground />
+      <Player 
+        onPositionChange={setPlayerPosition} 
+        portals={portals}
+        walls={wallCollisions}
+        onPortalProximity={onPortalProximity}
+        onPortalEnter={onPortalEnter}
+      />
+      <Camera target={playerPosition} />
+      
+      {/* Walls */}
+      {walls.map((wall, index) => (
+        <Wall
+          key={`wall-${index}`}
+          position={wall.position}
+          rotation={wall.rotation}
+          width={wall.width}
+          height={wall.height}
+        />
+      ))}
+      
+      {/* Portals */}
+      {portals.map((portal, index) => (
+        <Portal
+          key={`portal-${index}`}
+          position={portal.position}
+          color={portal.color}
+          label={portal.label}
+        />
+      ))}
     </>
   );
 }
 
 export function Scene3D() {
+  const navigate = useNavigate();
+  const [nearPortal, setNearPortal] = useState<string | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitioningPortal, setTransitioningPortal] = useState("");
+
+  const handlePortalEnter = (route: string, label: string) => {
+    setIsTransitioning(true);
+    setTransitioningPortal(label);
+    
+    // Delay navigation for smooth transition
+    setTimeout(() => {
+      navigate(route);
+      setIsTransitioning(false);
+      setTransitioningPortal("");
+    }, 1500);
+  };
+
   return (
-    <Canvas shadows camera={{ position: [0, 3, 10], fov: 55 }}>
-      <Scene />
-    </Canvas>
+    <div style={{ width: "100vw", height: "100vh", position: "fixed", top: 0, left: 0 }}>
+      <KeyboardControls map={keyboardMap}>
+        <Canvas shadows camera={{ position: [0, 5, 10], fov: 75 }}>
+          <Scene onPortalProximity={setNearPortal} onPortalEnter={handlePortalEnter} />
+        </Canvas>
+      </KeyboardControls>
+
+      {/* Portal proximity indicator */}
+      {nearPortal && !isTransitioning && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "rgba(0, 0, 0, 0.8)",
+            border: "2px solid #00ffff",
+            borderRadius: "15px",
+            padding: "20px 40px",
+            color: "#00ffff",
+            fontSize: "1.5rem",
+            fontWeight: "bold",
+            textAlign: "center",
+            zIndex: 100,
+            boxShadow: "0 0 30px rgba(0, 212, 255, 0.5)",
+            animation: "pulse 2s ease-in-out infinite",
+          }}
+        >
+          <div style={{ marginBottom: "8px" }}>🚪 {nearPortal}</div>
+          <div style={{ fontSize: "1rem", opacity: 0.8, fontWeight: "normal" }}>
+            Move closer to enter
+          </div>
+        </div>
+      )}
+
+      {/* Transition overlay */}
+      <PortalTransition isTransitioning={isTransitioning} portalName={transitioningPortal} />
+      
+      {/* Controls overlay */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "20px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          color: "#00ffff",
+          fontFamily: "monospace",
+          fontSize: "14px",
+          textAlign: "center",
+          background: "rgba(0, 0, 0, 0.7)",
+          padding: "15px 25px",
+          borderRadius: "10px",
+          border: "1px solid #00ffff",
+          zIndex: 10,
+        }}
+      >
+        <div>🎮 Controls: WASD or Arrow Keys to move</div>
+        <div style={{ marginTop: "5px" }}>🚪 Get close to portals to enter</div>
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: translate(-50%, -50%) scale(1.05);
+            opacity: 0.9;
+          }
+        }
+      `}</style>
+    </div>
   );
 }
-
