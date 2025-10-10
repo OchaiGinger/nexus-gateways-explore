@@ -21,9 +21,7 @@ export function Camera({ target, onCameraRotation, isFPS = true }: CameraProps) 
     document.addEventListener("pointerlockchange", () =>
       setIsLocked(document.pointerLockElement === gl.domElement)
     );
-    return () => {
-      gl.domElement.removeEventListener("click", handleClick);
-    };
+    return () => gl.domElement.removeEventListener("click", handleClick);
   }, [gl.domElement]);
 
   useEffect(() => {
@@ -45,3 +43,4 @@ export function Camera({ target, onCameraRotation, isFPS = true }: CameraProps) 
 
   return null;
 }
+
