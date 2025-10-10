@@ -3,7 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stars, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { useState } from "react";
-import { Player } from "./TutorPlayer";
+import { TutorPlayer } from "./TutorPlayer";
 import { Door } from "./Door";
 
 function Ground() {
@@ -84,8 +84,8 @@ export function HallwayScene() {
           </group>
         ))}
 
-        {/* Player */}
-        <Player
+        {/* TutorPlayer */}
+        <TutorPlayer
           portals={[]} // no portals in hallway
           onPositionChange={() => {}}
           onPortalProximity={() => {}}
