@@ -1,17 +1,17 @@
 import React, { useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { PointerLockControls, Text, Stars } from "@react-three/drei";
+import { Text, Stars, OrbitControls } from "@react-three/drei";
 
 /**
  * HallwayScene-FPS-L.tsx
  *
  * Single-file drop-in that implements:
- * - first-person (FPS) TutorPlayer using PointerLockControls
+ * - first-person (FPS) TutorPlayer using free camera controls (no pointer lock)
  * - doors that are rotated/back-against-wall (flush to wall)
  * - door proximity that requires both distance + player facing the door
  * - an L-shaped hallway (main corridor + side branch) with doors on both legs
- * - simple collision/clamping so the player can't walk through walls
+ * - ground collision to prevent falling through floor
  *
  * How to use:
  * - Drop this file into your React app and import `HallwaySceneFPS` where you want the scene.
@@ -45,8 +45,8 @@ const classroomsInput: DoorInfo[] = [
 ];
 
 // Corridor / geometry config
-const MAIN_AREA = { minX: -9.5, maxX: 9.5, minZ: -30, maxZ: 30 };
-const BRANCH_AREA = { minX: 9.5, maxX: 30.5, minZ: -20, maxZ: 4 };
+const MAIN_AREA = { minX: -9.5, maxX: 9.5, minZ: -30, maxZ: 30, minY: 0, maxY: 10 };
+const BRANCH_AREA = { minX: 9.5, maxX: 30.5, minZ: -20, maxZ: 4, minY: 0, maxY: 10 };
 
 // door appearance
 const DOOR_THICKNESS = 0.2;
@@ -112,7 +112,7 @@ function Door({
 }
 
 // -----------------------------
-// TutorPlayer (FPS) - pointer lock + movement + proximity checks
+// TutorPlayer (FPS) - free camera controls + movement + proximity checks
 // -----------------------------
 
 function TutorPlayer({
@@ -126,10 +126,50 @@ function TutorPlayer({
   onDoorProximity: (index: number | null) => void;
   speed?: number;
 }) {
-  const controlsRef = useRef<any>(null);
-  const { camera, gl } = useThree();
+  const { camera } = useThree();
+  
+  // Camera rotation state
+  const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
+  const [isMouseDown, setIsMouseDown] = useState(false);
 
   const keyState = useRef({ forward: false, backward: false, left: false, right: false });
+  
+  // Mouse move handler for camera rotation
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isMouseDown) return;
+      
+      const movementX = e.movementX || 0;
+      const movementY = e.movementY || 0;
+
+      setCameraRotation(prev => ({
+        y: prev.y - movementX * 0.002,
+        x: Math.max(-Math.PI / 3, Math.min(Math.PI / 3, prev.x - movementY * 0.002))
+      }));
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.button === 0) { // Left click
+        setIsMouseDown(true);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsMouseDown(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isMouseDown]);
+
+  // Keyboard controls
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "KeyW" || e.code === "ArrowUp") keyState.current.forward = true;
@@ -166,40 +206,55 @@ function TutorPlayer({
   const FACING_THRESHOLD = 0.6; // how much the player must be facing the door (dot product)
 
   useFrame((state, delta) => {
-    if (!controlsRef.current) return;
-
-    const controls = controlsRef.current;
-    const object = controls.getObject(); // the camera group controlled by PointerLockControls
-    if (!object) return;
+    // Update camera rotation
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = cameraRotation.y;
+    camera.rotation.x = cameraRotation.x;
 
     // store previous position so we can revert if collision
-    const prevPos = object.position.clone();
+    const prevPos = camera.position.clone();
 
     // build movement vector in local space
     frontVector.set(0, 0, Number(keyState.current.backward) - Number(keyState.current.forward));
     sideVector.set(Number(keyState.current.right) - Number(keyState.current.left), 0, 0);
     direction.copy(frontVector).add(sideVector);
+    
     if (direction.lengthSq() > 0) {
       direction.normalize();
-      // translate in local space (PointerLockControls attaches a local object)
-      object.translateX(direction.x * speed * delta);
-      object.translateZ(direction.z * speed * delta);
+      
+      // Apply movement relative to camera direction
+      const moveX = direction.x * Math.cos(cameraRotation.y) - direction.z * Math.sin(cameraRotation.y);
+      const moveZ = direction.x * Math.sin(cameraRotation.y) + direction.z * Math.cos(cameraRotation.y);
+      
+      camera.position.x += moveX * speed * delta;
+      camera.position.z += moveZ * speed * delta;
 
-      // clamp / collision simple: reject movement that leaves allowed areas
-      const px = object.position.x;
-      const pz = object.position.z;
+      // Ground collision - prevent going below floor (y=0)
+      if (camera.position.y < 1.6) {
+        camera.position.y = 1.6;
+      }
 
-      const inMain = px >= MAIN_AREA.minX && px <= MAIN_AREA.maxX && pz >= MAIN_AREA.minZ && pz <= MAIN_AREA.maxZ;
-      const inBranch = px >= BRANCH_AREA.minX && px <= BRANCH_AREA.maxX && pz >= BRANCH_AREA.minZ && pz <= BRANCH_AREA.maxZ;
+      // Wall collision - clamp to allowed areas
+      const px = camera.position.x;
+      const pz = camera.position.z;
+      const py = camera.position.y;
+
+      const inMain = px >= MAIN_AREA.minX && px <= MAIN_AREA.maxX && 
+                     pz >= MAIN_AREA.minZ && pz <= MAIN_AREA.maxZ &&
+                     py >= MAIN_AREA.minY && py <= MAIN_AREA.maxY;
+                     
+      const inBranch = px >= BRANCH_AREA.minX && px <= BRANCH_AREA.maxX && 
+                      pz >= BRANCH_AREA.minZ && pz <= BRANCH_AREA.maxZ &&
+                      py >= BRANCH_AREA.minY && py <= BRANCH_AREA.maxY;
 
       if (!inMain && !inBranch) {
-        // revert
-        object.position.copy(prevPos);
+        // revert movement if collision
+        camera.position.copy(prevPos);
       }
     }
 
     // update parent/state about position
-    onPositionChange(object.position.clone());
+    onPositionChange(camera.position.clone());
 
     // Door proximity: require closeness AND that the player is looking at the door
     state.camera.getWorldDirection(cameraDir); // pointing vector
@@ -209,7 +264,7 @@ function TutorPlayer({
 
     doors.forEach((d, i) => {
       tmpVec.set(d.position[0], d.position[1], d.position[2]);
-      const toDoor = tmpVec.clone().sub(object.position);
+      const toDoor = tmpVec.clone().sub(camera.position);
       const dist = toDoor.length();
       if (dist <= DIST_THRESHOLD) {
         toDoor.normalize();
@@ -228,12 +283,7 @@ function TutorPlayer({
     setHoveredDoorIndex(closestIndex);
   });
 
-  return (
-    <>
-      {/* PointerLockControls automatically requests pointer lock on click */}
-      <PointerLockControls ref={controlsRef} />
-    </>
-  );
+  return null; // No visual component needed - we're controlling the camera directly
 }
 
 // -----------------------------
@@ -243,17 +293,44 @@ function TutorPlayer({
 function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex }: { onDoorClick: (i: number) => void; doorWorldInfos: (DoorInfo & { worldPosition: [number, number, number]; rotationY: number })[]; nearDoorIndex: number | null; }) {
   return (
     <group>
-      {/* Main floor (long) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+      {/* Main floor (long) - with collision */}
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[0, 0, 0]} 
+        receiveShadow
+      >
         <planeGeometry args={[20, 60]} />
         <meshStandardMaterial color="#0a0a1f" />
       </mesh>
 
-      {/* L-branch floor (attached to right side, near z = -8) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[19.75, 0, -8]} receiveShadow>
+      {/* L-branch floor (attached to right side, near z = -8) - with collision */}
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[19.75, 0, -8]} 
+        receiveShadow
+      >
         {/* width along X, depth along Z - this gives a "branch" to the right */}
         <planeGeometry args={[22, 24]} />
         <meshStandardMaterial color="#071028" />
+      </mesh>
+
+      {/* Invisible collision walls to prevent going through floors */}
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[0, -0.5, 0]}
+        visible={false} // Make invisible but still have collision
+      >
+        <planeGeometry args={[20, 60]} />
+        <meshStandardMaterial transparent opacity={0} />
+      </mesh>
+      
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[19.75, -0.5, -8]}
+        visible={false} // Make invisible but still have collision
+      >
+        <planeGeometry args={[22, 24]} />
+        <meshStandardMaterial transparent opacity={0} />
       </mesh>
 
       {/* Main corridor side walls */}
@@ -343,7 +420,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
   const doorPositionsForPlayer = doorWorldInfos.map((d) => ({ position: d.worldPosition }));
 
   const [nearDoorIndex, setNearDoorIndex] = useState<number | null>(null);
-  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1, 20));
+  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1.6, 20));
 
   const handleDoorClick = (index: number) => {
     // enter classroom: call parent or default behaviour
@@ -356,7 +433,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
 
   return (
     <div style={{ width: "100vw", height: "100vh", position: "fixed", inset: 0 }}>
-      <Canvas shadows camera={{ position: [0, 5, 25], fov: 75 }}>
+      <Canvas shadows camera={{ position: [0, 1.6, 20], fov: 75 }}>
         <fog attach="fog" args={["#000015", 10, 220]} />
         <Stars radius={100} depth={50} count={2000} factor={4} saturation={0} fade speed={1} />
 
@@ -369,7 +446,17 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           speed={6}
         />
 
-        {/* first-person camera is the PointerLockControls' camera; we still include a helper Camera light if needed */}
+        {/* Optional: Add OrbitControls for debugging (hold right mouse to orbit) */}
+        <OrbitControls 
+          enablePan={false}
+          enableZoom={true}
+          enableRotate={true}
+          mouseButtons={{
+            LEFT: null, // Disable left click orbit
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.ROTATE
+          }}
+        />
       </Canvas>
 
       {/* HUD overlay */}
@@ -420,11 +507,10 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           fontFamily: "monospace",
         }}
       >
-        <div>Click to lock pointer • WASD / Arrows to move • Look at a door + get close to interact</div>
+        <div>Click + Drag to look around • WASD / Arrows to move • Look at a door + get close to interact</div>
       </div>
     </div>
   );
 }
 
 export default HallwaySceneFPS;
-
