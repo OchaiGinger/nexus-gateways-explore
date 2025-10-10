@@ -1,91 +1,62 @@
-import { useRef, useEffect } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useFrame, useLoader } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { useRef, useState } from "react";
 
-interface TutorPlayerProps {
-  modelUrl: string;
-  onPositionChange?: (position: THREE.Vector3) => void;
-  doors: Array<{ position: [number, number, number] }>;
-}
+export default function Player() {
+  const { scene } = useGLTF("/models/character.glb");
+  const playerRef = useRef();
+  const speed = 0.1;
+  const [rotationY, setRotationY] = useState(0);
+  const keys = useRef({});
 
-export function TutorPlayer({ modelUrl, onPositionChange, doors }: TutorPlayerProps) {
-  const { scene } = useGLTF(modelUrl);
-  const playerRef = useRef<THREE.Group>(null);
-  const { camera } = useThree();
-  const velocity = useRef(new THREE.Vector3());
-  const direction = useRef(new THREE.Vector3());
-  const keys = useRef<Record<string, boolean>>({});
+  const movePlayer = (delta, camera) => {
+    const dir = new THREE.Vector3();
+    const forward = keys.current["w"] || keys.current["ArrowUp"];
+    const backward = keys.current["s"] || keys.current["ArrowDown"];
+    const left = keys.current["a"] || keys.current["ArrowLeft"];
+    const right = keys.current["d"] || keys.current["ArrowRight"];
 
-  // Track key presses
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => (keys.current[e.code] = true);
-    const handleKeyUp = (e: KeyboardEvent) => (keys.current[e.code] = false);
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, []);
+    if (forward || backward || left || right) {
+      const angle = Math.atan2(
+        camera.position.x - playerRef.current.position.x,
+        camera.position.z - playerRef.current.position.z
+      );
 
-  useFrame((_, delta) => {
-    if (!playerRef.current) return;
+      let moveX = 0;
+      let moveZ = 0;
 
-    // WASD movement
-    const forward = keys.current["KeyW"] || keys.current["ArrowUp"];
-    const backward = keys.current["KeyS"] || keys.current["ArrowDown"];
-    const left = keys.current["KeyA"] || keys.current["ArrowLeft"];
-    const right = keys.current["KeyD"] || keys.current["ArrowRight"];
+      if (forward) moveZ = -speed;
+      if (backward) moveZ = speed;
+      if (left) moveX = -speed;
+      if (right) moveX = speed;
 
-    const moveX = (right ? 1 : 0) - (left ? 1 : 0);
-    const moveZ = (backward ? 1 : 0) - (forward ? 1 : 0);
+      const rotation = angle;
+      playerRef.current.rotation.y = rotation;
 
-    // Direction relative to camera
-    const camDir = new THREE.Vector3();
-    camera.getWorldDirection(camDir);
-    camDir.y = 0;
-    camDir.normalize();
-
-    const sideDir = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0, 1, 0)).normalize();
-
-    direction.current
-      .copy(camDir)
-      .multiplyScalar(moveZ)
-      .add(sideDir.multiplyScalar(moveX))
-      .normalize()
-      .multiplyScalar(5);
-
-    velocity.current.lerp(direction.current, 0.1);
-    playerRef.current.position.addScaledVector(velocity.current, delta);
-
-    // Keep within bounds
-    playerRef.current.position.x = Math.max(-8, Math.min(8, playerRef.current.position.x));
-    playerRef.current.position.z = Math.max(-25, Math.min(25, playerRef.current.position.z));
-
-    // Make player face movement direction
-    if (moveX !== 0 || moveZ !== 0) {
-      const angle = Math.atan2(direction.current.x, direction.current.z);
-      playerRef.current.rotation.y = angle;
+      dir.set(moveX, 0, moveZ);
+      dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotation);
+      playerRef.current.position.add(dir);
     }
+  };
 
-    // Camera follows player from behind and slightly above
-    const camOffset = new THREE.Vector3(0, 1.5, 3).applyAxisAngle(new THREE.Vector3(0, 1, 0), playerRef.current.rotation.y);
-    const desiredCamPos = playerRef.current.position.clone().add(camOffset);
-    camera.position.lerp(desiredCamPos, 0.2);
-    camera.lookAt(playerRef.current.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
-
-    if (onPositionChange) onPositionChange(playerRef.current.position);
+  useFrame((state, delta) => {
+    const camera = state.camera;
+    movePlayer(delta, camera);
   });
 
+  const handleKeyDown = (e) => (keys.current[e.key.toLowerCase()] = true);
+  const handleKeyUp = (e) => (keys.current[e.key.toLowerCase()] = false);
+
   return (
-    <group ref={playerRef} position={[0, 0.1, 20]} scale={[1.2, 1.2, 1.2]}>
-      <primitive object={scene} />
-    </group>
+    <primitive
+      object={scene}
+      ref={playerRef}
+      scale={1}
+      position={[0, 0, 0]}
+      rotation={[0, Math.PI, 0]} // faces away from camera
+      onPointerDown={() => window.addEventListener("keydown", handleKeyDown)}
+      onPointerUp={() => window.addEventListener("keyup", handleKeyUp)}
+    />
   );
 }
-
-useGLTF.preload("/models/character.glb");
-
-
-
