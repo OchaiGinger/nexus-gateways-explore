@@ -1,132 +1,104 @@
-import { useRef, useEffect, useState } from "react";
-import { useFrame } from "@react-three/fiber";
-import { useKeyboardControls, useGLTF } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
+import { PointerLockControls } from "@react-three/drei";
 import * as THREE from "three";
+import { useEffect, useRef, useState } from "react";
 
-interface TutorPlayerProps {
-  onPositionChange?: (position: THREE.Vector3) => void;
-  cameraRotation?: number;
-  onDoorProximity?: (doorIndex: number | null) => void;
-  doors: Array<{ position: [number, number, number]; side?: string }>;
-  isFPS?: boolean;
-}
+export function TutorPlayer({ onEnterDoor }: { onEnterDoor: (index: number) => void }) {
+  const { camera, scene } = useThree();
+  const velocity = new THREE.Vector3();
+  const direction = new THREE.Vector3();
+  const keys = useRef<{ [key: string]: boolean }>({});
+  const [doorIndex, setDoorIndex] = useState<number | null>(null);
 
-export function TutorPlayer({
-  onPositionChange,
-  cameraRotation = 0,
-  onDoorProximity,
-  doors,
-  isFPS = true,
-}: TutorPlayerProps) {
-  const groupRef = useRef<THREE.Group>(null);
-  const [model, setModel] = useState<THREE.Group | null>(null);
-  const velocity = useRef(new THREE.Vector3());
-  const isMoving = useRef(false);
-  const nearDoor = useRef<number | null>(null);
+  const speed = 0.08;
+  const playerHeight = 1.6;
 
-  const { scene } = useGLTF("/models/character.glb");
+  // Visible hands (player model)
+  const handsRef = useRef<THREE.Group>(null);
 
   useEffect(() => {
-    if (scene) {
-      const clone = scene.clone();
-      clone.scale.set(1, 1, 1);
-      clone.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-        }
-      });
-      setModel(clone);
-    }
-  }, [scene]);
+    const handleKeyDown = (e: KeyboardEvent) => (keys.current[e.code] = true);
+    const handleKeyUp = (e: KeyboardEvent) => (keys.current[e.code] = false);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
 
-  const [sub] = useKeyboardControls();
-  const moveState = useRef({
-    forward: false,
-    backward: false,
-    left: false,
-    right: false,
-  });
+  useFrame(() => {
+    direction.set(0, 0, 0);
+    if (keys.current["KeyW"]) direction.z -= 1;
+    if (keys.current["KeyS"]) direction.z += 1;
+    if (keys.current["KeyA"]) direction.x -= 1;
+    if (keys.current["KeyD"]) direction.x += 1;
+    direction.normalize();
 
-  useEffect(() => {
-    return sub((state) => {
-      moveState.current = {
-        forward: state.forward,
-        backward: state.backward,
-        left: state.left,
-        right: state.right,
-      };
-    });
-  }, [sub]);
+    // Move relative to camera direction
+    const move = new THREE.Vector3();
+    camera.getWorldDirection(move);
+    move.y = 0;
+    move.normalize();
 
-  useFrame((state, delta) => {
-    if (!groupRef.current) return;
+    const side = new THREE.Vector3();
+    side.crossVectors(camera.up, move).normalize();
 
-    const move = moveState.current;
-    const moveX = (move.right ? 1 : 0) - (move.left ? 1 : 0);
-    const moveZ = (move.forward ? 1 : 0) - (move.backward ? 1 : 0);
-    isMoving.current = moveX !== 0 || moveZ !== 0;
+    const forwardMove = move.multiplyScalar(direction.z * speed);
+    const sideMove = side.multiplyScalar(direction.x * speed);
 
-    if (isMoving.current) {
-      const len = Math.sqrt(moveX * moveX + moveZ * moveZ);
-      const nx = moveX / len;
-      const nz = moveZ / len;
-      const sin = Math.sin(cameraRotation);
-      const cos = Math.cos(cameraRotation);
-      const wx = nx * cos - nz * sin;
-      const wz = nx * sin + nz * cos;
-      velocity.current.x = wx * 8;
-      velocity.current.z = wz * 8;
-    } else {
-      velocity.current.x *= 0.8;
-      velocity.current.z *= 0.8;
-      if (Math.abs(velocity.current.x) < 0.05) velocity.current.x = 0;
-      if (Math.abs(velocity.current.z) < 0.05) velocity.current.z = 0;
-    }
+    camera.position.add(forwardMove);
+    camera.position.add(sideMove);
 
-    // Apply movement
-    groupRef.current.position.x += velocity.current.x * delta;
-    groupRef.current.position.z += velocity.current.z * delta;
+    // Height lock
+    camera.position.y = playerHeight;
 
-    // Boundaries
-    groupRef.current.position.x = Math.max(-8, Math.min(8, groupRef.current.position.x));
-    groupRef.current.position.z = Math.max(-28, Math.min(28, groupRef.current.position.z));
+    // Simple walls
+    camera.position.x = THREE.MathUtils.clamp(camera.position.x, -8.5, 8.5);
+    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -28, 28);
 
-    // Camera (FPS)
-    if (isFPS) {
-      state.camera.position.copy(groupRef.current.position);
-      state.camera.position.y += 1.6;
-      state.camera.rotation.y = cameraRotation;
-    }
-
-    // Door detection
-    let closestDoor: number | null = null;
-    let minDist = Infinity;
-    doors.forEach((door, i) => {
-      const doorPos = new THREE.Vector3(...door.position);
-      const dist = groupRef.current!.position.distanceTo(doorPos);
-      if (dist < 2.5 && dist < minDist) {
-        closestDoor = i;
+    // Proximity detection
+    const doors = scene.children.filter((obj) => obj.name.startsWith("Door"));
+    let closestDoor = null;
+    let minDist = 2;
+    doors.forEach((door: any, i) => {
+      const dist = camera.position.distanceTo(door.position);
+      if (dist < minDist) {
         minDist = dist;
+        closestDoor = i;
       }
     });
 
-    if (closestDoor !== nearDoor.current) {
-      nearDoor.current = closestDoor;
-      onDoorProximity?.(closestDoor);
-    }
-
-    onPositionChange?.(groupRef.current.position.clone());
+    setDoorIndex(closestDoor);
   });
 
+  // Press E to enter door
+  useEffect(() => {
+    const handlePress = (e: KeyboardEvent) => {
+      if (e.code === "KeyE" && doorIndex !== null) onEnterDoor(doorIndex);
+    };
+    window.addEventListener("keydown", handlePress);
+    return () => window.removeEventListener("keydown", handlePress);
+  }, [doorIndex, onEnterDoor]);
+
   return (
-    <group ref={groupRef} position={[0, 0, -20]}>
-      {!isFPS && model && <primitive object={model} scale={1} />}
-    </group>
+    <>
+      <PointerLockControls />
+      {/* Visible hands */}
+      <group ref={handsRef} position={[0, -0.3, -0.8]}>
+        <mesh>
+          <boxGeometry args={[0.2, 0.2, 0.6]} />
+          <meshStandardMaterial color="#ff4dff" emissive="#ff00ff" emissiveIntensity={0.7} />
+        </mesh>
+        <mesh position={[0.3, 0, 0]}>
+          <boxGeometry args={[0.2, 0.2, 0.6]} />
+          <meshStandardMaterial color="#ff4dff" emissive="#ff00ff" emissiveIntensity={0.7} />
+        </mesh>
+      </group>
+    </>
   );
 }
 
-useGLTF.preload("/models/character.glb");
 
 
 
