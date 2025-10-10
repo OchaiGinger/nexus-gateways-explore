@@ -4,11 +4,11 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text, Stars } from "@react-three/drei";
 
 /**
- * Updated HallwayScene with:
- * 1. Reduced player speed
- * 2. Enhanced door design with realism
- * 3. Fixed label alignment (not inside walls)
- * 4. Removed wall to L-wing (open gap)
+ * Fixed HallwayScene with:
+ * 1. Properly aligned door labels
+ * 2. Complete walls (start, end, L-wing)
+ * 3. Fixed camera controls
+ * 4. Enhanced door designs with colors
  */
 
 // -----------------------------
@@ -26,7 +26,13 @@ const classroomsInput: DoorInfo[] = [
   { index: 0, label: "Mathematics", originalPosition: [-6, 0, -20], isInSession: true },
   { index: 1, label: "Physics", originalPosition: [6, 0, -20], isInSession: false },
   { index: 2, label: "Computer Science", originalPosition: [-6, 0, -10], isInSession: true },
-
+  { index: 3, label: "Chemistry", originalPosition: [6, 0, -10], isInSession: false },
+  { index: 4, label: "Biology", originalPosition: [-6, 0, 0], isInSession: true },
+  { index: 5, label: "Literature", originalPosition: [6, 0, 0], isInSession: false },
+  { index: 6, label: "History", originalPosition: [-6, 0, 10], isInSession: false },
+  { index: 7, label: "Art & Design", originalPosition: [6, 0, 10], isInSession: true },
+  { index: 8, label: "Robotics Lab", originalPosition: [20, 0, -8], isInSession: true },
+  { index: 9, label: "Media Room", originalPosition: [26, 0, -8], isInSession: false },
 ];
 
 // Corridor / geometry config
@@ -39,7 +45,7 @@ const DOOR_WIDTH = 2.0;
 const DOOR_HEIGHT = 2.6;
 
 // -----------------------------
-// Enhanced Door component with realistic design
+// Enhanced Door component with proper colors and label alignment
 // -----------------------------
 
 function Door({
@@ -53,6 +59,17 @@ function Door({
 }) {
   const { worldPosition, rotationY } = info;
 
+  // Different colors for different departments
+  const getDoorColor = () => {
+    const colors = [
+      "#8B4513", "#2F4F4F", "#483D8B", "#556B2F", "#8B008B", 
+      "#CD5C5C", "#20B2AA", "#DA70D6", "#F4A460", "#7B68EE"
+    ];
+    return colors[info.index % colors.length];
+  };
+
+  const doorColor = getDoorColor();
+
   return (
     <group position={worldPosition} rotation={[0, rotationY, 0]}>
       {/* Enhanced Door Frame */}
@@ -60,10 +77,10 @@ function Door({
         {/* Main frame */}
         <mesh castShadow receiveShadow>
           <boxGeometry args={[DOOR_THICKNESS + 0.1, DOOR_HEIGHT + 0.3, DOOR_WIDTH + 0.15]} />
-          <meshStandardMaterial color="#3a3a3a" metalness={0.4} roughness={0.6} />
+          <meshStandardMaterial color="#5a4a3a" metalness={0.4} roughness={0.6} />
         </mesh>
         
-        {/* Door slab - positioned to touch the ground */}
+        {/* Door slab - with proper color */}
         <mesh
           position={[0, 0, 0]}
           castShadow
@@ -75,7 +92,7 @@ function Door({
         >
           <boxGeometry args={[DOOR_THICKNESS, DOOR_HEIGHT, DOOR_WIDTH]} />
           <meshStandardMaterial
-            color={info.isInSession ? "#5a5a8a" : "#4a6a7a"}
+            color={doorColor}
             metalness={0.3}
             roughness={0.5}
           />
@@ -84,22 +101,22 @@ function Door({
         {/* Door panels for realism */}
         <mesh position={[0, 0.5, 0]} castShadow>
           <boxGeometry args={[DOOR_THICKNESS - 0.02, 0.8, DOOR_WIDTH - 0.3]} />
-          <meshStandardMaterial color="#4a4a4a" metalness={0.5} roughness={0.4} />
+          <meshStandardMaterial color="#6a5a4a" metalness={0.5} roughness={0.4} />
         </mesh>
         <mesh position={[0, -0.5, 0]} castShadow>
           <boxGeometry args={[DOOR_THICKNESS - 0.02, 0.8, DOOR_WIDTH - 0.3]} />
-          <meshStandardMaterial color="#4a4a4a" metalness={0.5} roughness={0.4} />
+          <meshStandardMaterial color="#6a5a4a" metalness={0.5} roughness={0.4} />
         </mesh>
 
         {/* Enhanced Door handle */}
         <group position={[0, 0, DOOR_WIDTH / 2 - 0.08]}>
           <mesh castShadow>
             <cylinderGeometry args={[0.04, 0.04, 0.12, 8]} />
-            <meshStandardMaterial color="#cccccc" metalness={0.9} roughness={0.1} />
+            <meshStandardMaterial color="#dddddd" metalness={0.9} roughness={0.1} />
           </mesh>
           <mesh position={[0.08, 0, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
             <cylinderGeometry args={[0.02, 0.02, 0.16, 8]} />
-            <meshStandardMaterial color="#aaaaaa" metalness={0.8} roughness={0.2} />
+            <meshStandardMaterial color="#bbbbbb" metalness={0.8} roughness={0.2} />
           </mesh>
         </group>
 
@@ -114,7 +131,7 @@ function Door({
         </mesh>
       </group>
 
-      {/* Session status indicator - moved to be more visible */}
+      {/* Session status indicator */}
       <mesh position={[0.2, DOOR_HEIGHT + 0.2, 0]} castShadow>
         <sphereGeometry args={[0.1, 12, 12]} />
         <meshStandardMaterial 
@@ -124,9 +141,9 @@ function Door({
         />
       </mesh>
 
-      {/* Enhanced Door label - properly positioned outside the wall */}
-      <group position={[0.3, DOOR_HEIGHT + 0.5, 0]}>
-        <mesh position={[0, 0, -0.01]}>
+      {/* Enhanced Door label - PROPERLY ALIGNED based on door rotation */}
+      <group position={[0, DOOR_HEIGHT + 0.5, 0]}>
+        <mesh position={[0, 0, 0]}>
           <planeGeometry args={[2.0, 0.4]} />
           <meshStandardMaterial 
             color="#ffffff" 
@@ -146,7 +163,7 @@ function Door({
           {info.label}
         </Text>
         {/* Label frame */}
-        <mesh position={[0, 0, -0.02]}>
+        <mesh position={[0, 0, -0.01]}>
           <planeGeometry args={[2.05, 0.45]} />
           <meshStandardMaterial color="#2a2a2a" />
         </mesh>
@@ -267,7 +284,7 @@ function FPSPlayerBody({ position, rotation }: { position: THREE.Vector3; rotati
 }
 
 // -----------------------------
-// Updated Hallway with NO wall to L-section
+// Updated Hallway with COMPLETE walls
 // -----------------------------
 
 function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, playerRotation }: { 
@@ -295,30 +312,53 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         <meshStandardMaterial color="#27305a" metalness={0.1} roughness={0.7} />
       </mesh>
 
-      {/* Bright corridor walls */}
+      {/* COMPLETE corridor walls */}
+      {/* Left wall - full length */}
       <mesh position={[-10, 5, 0]} receiveShadow castShadow>
         <boxGeometry args={[0.5, 10, 60]} />
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
       
-      {/* Right wall - ONLY up to the L-section opening */}
+      {/* Right wall - split to allow L-section opening */}
       <mesh position={[10, 5, -18]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 10, 24]} /> {/* Only covers area before L-section */}
+        <boxGeometry args={[0.5, 10, 24]} /> {/* Before L-section */}
+        <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
+      </mesh>
+      <mesh position={[10, 5, 10]} receiveShadow castShadow>
+        <boxGeometry args={[0.5, 10, 20]} /> {/* After L-section */}
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
 
-      {/* Branch walls */}
+      {/* START WALL (back of main corridor) */}
+      <mesh position={[0, 5, -30]} receiveShadow castShadow>
+        <boxGeometry args={[20, 10, 0.5]} />
+        <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
+      </mesh>
+
+      {/* END WALL (front of main corridor) */}
+      <mesh position={[0, 5, 30]} receiveShadow castShadow>
+        <boxGeometry args={[20, 10, 0.5]} />
+        <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
+      </mesh>
+
+      {/* L-SECTION WALLS */}
+      {/* Back wall of L-section */}
       <mesh position={[19.75, 5, -20]} receiveShadow castShadow>
         <boxGeometry args={[22, 10, 0.5]} />
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
+      
+      {/* End wall of L-section */}
+      <mesh position={[19.75, 5, 4]} receiveShadow castShadow>
+        <boxGeometry args={[22, 10, 0.5]} />
+        <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
+      </mesh>
+      
+      {/* Outer wall of L-section */}
       <mesh position={[30.5, 5, -8]} receiveShadow castShadow>
         <boxGeometry args={[0.5, 10, 24]} />
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
-
-      {/* REMOVED: The inner partition wall between main corridor and L-section */}
-      {/* This creates the open gap we want */}
 
       {/* Bright ceiling */}
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 10, 0]} receiveShadow>
@@ -395,7 +435,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         </Text>
       </group>
 
-      {/* L-Section entrance marker - Now more prominent */}
+      {/* L-Section entrance marker */}
       <group position={[5, 3, -8]}>
         <mesh position={[0, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
           <planeGeometry args={[3, 0.8]} />
@@ -411,6 +451,19 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
           rotation={[0, -Math.PI / 2, 0]}
         >
           L-SECTION →
+        </Text>
+      </group>
+
+      {/* Department signs */}
+      <group position={[0, 7, 0]}>
+        <Text 
+          fontSize={0.4} 
+          color="#00ffff" 
+          anchorX="center" 
+          anchorY="middle"
+          fontWeight="bold"
+        >
+          ACADEMIC WING
         </Text>
       </group>
 
@@ -456,7 +509,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
 }
 
 // -----------------------------
-// Updated TutorPlayer with REDUCED speed
+// FIXED TutorPlayer with proper camera-relative movement
 // -----------------------------
 
 function TutorPlayer({
@@ -464,7 +517,7 @@ function TutorPlayer({
   onPositionChange,
   onDoorProximity,
   onRotationChange,
-  speed = 3, // REDUCED from 6 to 3
+  speed = 3,
 }: {
   doors: { position: [number, number, number] }[];
   onPositionChange: (p: THREE.Vector3) => void;
@@ -476,6 +529,7 @@ function TutorPlayer({
   
   const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
   const [isMouseDown, setIsMouseDown] = useState(false);
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
   const keyState = useRef({ forward: false, backward: false, left: false, right: false });
   
@@ -483,8 +537,8 @@ function TutorPlayer({
     const handleMouseMove = (e: MouseEvent) => {
       if (!isMouseDown) return;
       
-      const movementX = e.movementX || 0;
-      const movementY = e.movementY || 0;
+      const movementX = e.movementX || (e.clientX - lastMousePos.x);
+      const movementY = e.movementY || (e.clientY - lastMousePos.y);
 
       const newRotation = {
         y: cameraRotation.y - movementX * 0.002,
@@ -493,11 +547,13 @@ function TutorPlayer({
 
       setCameraRotation(newRotation);
       onRotationChange(newRotation.y);
+      setLastMousePos({ x: e.clientX, y: e.clientY });
     };
 
     const handleMouseDown = (e: MouseEvent) => {
       if (e.button === 0) {
         setIsMouseDown(true);
+        setLastMousePos({ x: e.clientX, y: e.clientY });
       }
     };
 
@@ -514,7 +570,7 @@ function TutorPlayer({
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isMouseDown, cameraRotation, onRotationChange]);
+  }, [isMouseDown, cameraRotation, onRotationChange, lastMousePos]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -548,28 +604,42 @@ function TutorPlayer({
   const FACING_THRESHOLD = 0.6;
 
   useFrame((state, delta) => {
+    // Update camera rotation FIRST
     camera.rotation.order = 'YXZ';
     camera.rotation.y = cameraRotation.y;
     camera.rotation.x = cameraRotation.x;
 
     const prevPos = camera.position.clone();
-    frontVector.set(0, 0, Number(keyState.current.backward) - Number(keyState.current.forward));
-    sideVector.set(Number(keyState.current.right) - Number(keyState.current.left), 0, 0);
-    direction.copy(frontVector).add(sideVector);
+    
+    // Get camera forward and right vectors
+    camera.getWorldDirection(frontVector);
+    const rightVector = new THREE.Vector3().crossVectors(frontVector, camera.up).normalize();
+    
+    // Reset direction
+    direction.set(0, 0, 0);
+    
+    // Apply movement relative to camera direction
+    if (keyState.current.forward) direction.add(frontVector);
+    if (keyState.current.backward) direction.sub(frontVector);
+    if (keyState.current.right) direction.add(rightVector);
+    if (keyState.current.left) direction.sub(rightVector);
+    
+    // Remove Y component to keep movement horizontal
+    direction.y = 0;
     
     if (direction.lengthSq() > 0) {
       direction.normalize();
       
-      const moveX = direction.x * Math.cos(cameraRotation.y) - direction.z * Math.sin(cameraRotation.y);
-      const moveZ = direction.x * Math.sin(cameraRotation.y) + direction.z * Math.cos(cameraRotation.y);
-      
-      camera.position.x += moveX * speed * delta;
-      camera.position.z += moveZ * speed * delta;
+      // Apply movement
+      camera.position.x += direction.x * speed * delta;
+      camera.position.z += direction.z * speed * delta;
 
+      // Keep player at correct height
       if (camera.position.y < 1.6) {
         camera.position.y = 1.6;
       }
 
+      // Boundary checks
       const px = camera.position.x;
       const pz = camera.position.z;
       const py = camera.position.y;
@@ -665,7 +735,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       top: 0, 
       left: 0,
       background: "#000000",
-      cursor: "grab"
+      cursor: isMouseDown ? "grabbing" : "grab"
     }}>
       <Canvas 
         shadows 
@@ -688,7 +758,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           onPositionChange={(p) => setPlayerPos(p)}
           onDoorProximity={(idx) => setNearDoorIndex(idx)}
           onRotationChange={(rotation) => setPlayerRotation(rotation)}
-          speed={3} // Reduced speed for better control
+          speed={3}
         />
       </Canvas>
 
