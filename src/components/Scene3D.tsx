@@ -29,10 +29,10 @@ function Ground() {
       {/* Grid overlay */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
         <planeGeometry args={[200, 200, 40, 40]} />
-        <meshBasicMaterial color="#00ffff" wireframe={true} transparent opacity={0.06} />
+        <meshBasicMaterial color="#00ffff" wireframe transparent opacity={0.06} />
       </mesh>
 
-      {/* subtle emissive inner circle for depth */}
+      {/* Inner emissive circle */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
         <circleGeometry args={[60, 64]} />
         <meshStandardMaterial emissive="#002533" emissiveIntensity={0.45} roughness={1} />
@@ -67,7 +67,6 @@ function Lights({ portals }: { portals: { position: [number, number, number]; co
       />
       <pointLight position={[0, 10, 0]} intensity={0.25} />
 
-      {/* small colored point lights near portals to emphasize them */}
       {portals.map((p, i) => (
         <pointLight
           key={`p-light-${i}`}
@@ -79,7 +78,6 @@ function Lights({ portals }: { portals: { position: [number, number, number]; co
         />
       ))}
 
-      {/* Environment (IBL) for nicer materials */}
       <Environment preset="city" />
     </>
   );
@@ -97,10 +95,10 @@ const portals = [
 ];
 
 const walls = [
-  { position: [0, 3, -40] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], width: 100, height: 6, depth: 1 },
-  { position: [0, 3, 40] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], width: 100, height: 6, depth: 1 },
-  { position: [-40, 3, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], width: 80, height: 6, depth: 1 },
-  { position: [40, 3, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], width: 80, height: 6, depth: 1 },
+  { position: [0, 3, -40] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], width: 100, height: 6 },
+  { position: [0, 3, 40] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], width: 100, height: 6 },
+  { position: [-40, 3, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], width: 80, height: 6 },
+  { position: [40, 3, 0] as [number, number, number], rotation: [0, Math.PI / 2, 0] as [number, number, number], width: 80, height: 6 },
 ];
 
 const wallCollisions = walls.map((wall) => ({
@@ -117,21 +115,19 @@ function Scene({
   onPortalEnter: (route: string, label: string) => void;
 }) {
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, 0));
-  // Ready Player Me public GLB URL placeholder:
-  // Replace the string below with the actual public GLB URL you get from Ready Player Me.
-  const READY_PLAYER_ME_GLTF_URL = "PASTE_READY_PLAYER_ME_GLTF_URL_HERE";
+
+  // ✅ Use local model instead of remote URL
+  const localModelUrl = "/models/character.glb";
 
   return (
     <>
-      {/* scene fog */}
       <fog attach="fog" args={["#000015", 10, 220]} />
-
       <Lights portals={portals} />
       <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
       <Ground />
 
       <Player
-        modelUrl={READY_PLAYER_ME_GLTF_URL} // <--- paste your Ready Player Me GLB public URL here
+        modelUrl={localModelUrl}
         onPositionChange={setPlayerPosition}
         portals={portals}
         walls={wallCollisions}
@@ -141,12 +137,10 @@ function Scene({
 
       <Camera target={playerPosition} />
 
-      {/* walls */}
       {walls.map((wall, idx) => (
         <Wall key={idx} position={wall.position} rotation={wall.rotation} width={wall.width} height={wall.height} />
       ))}
 
-      {/* portals */}
       {portals.map((p, idx) => (
         <Portal key={idx} position={p.position} color={p.color} label={p.label} />
       ))}
@@ -164,7 +158,6 @@ export function Scene3D() {
     setIsTransitioning(true);
     setTransitioningPortal(label);
 
-    // Delay navigation for smooth transition
     setTimeout(() => {
       navigate(route);
       setIsTransitioning(false);
@@ -180,10 +173,8 @@ export function Scene3D() {
         </Canvas>
       </KeyboardControls>
 
-      {/* Transition overlay */}
       <PortalTransition isTransitioning={isTransitioning} portalName={transitioningPortal} />
 
-      {/* Controls overlay */}
       <div
         style={{
           position: "absolute",
@@ -201,7 +192,7 @@ export function Scene3D() {
           zIndex: 10,
         }}
       >
-        <div>🎮 WASD/Arrows: Move | 🖱️ Mouse: Rotate Camera</div>
+        <div>🎮 WASD / Arrows: Move | 🖱️ Mouse: Rotate Camera</div>
         <div style={{ marginTop: "5px" }}>🚪 Get close to portals to enter</div>
       </div>
 
@@ -220,3 +211,4 @@ export function Scene3D() {
     </div>
   );
 }
+
