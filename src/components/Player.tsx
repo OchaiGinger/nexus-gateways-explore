@@ -34,28 +34,26 @@ export function Player({ onPositionChange, portals, walls = [], onPortalProximit
   useFrame((state, delta) => {
     if (!meshRef.current) return;
 
-    // Reset direction
-    direction.current.set(0, 0, 0);
-
     // Calculate movement direction relative to camera
-    const moveDirection = new THREE.Vector3();
-    if (forward) moveDirection.z -= 1;
-    if (backward) moveDirection.z += 1;
-    if (left) moveDirection.x -= 1;
-    if (right) moveDirection.x += 1;
+    const moveX = (right ? 1 : 0) - (left ? 1 : 0);
+    const moveZ = (backward ? 1 : 0) - (forward ? 1 : 0);
 
-    // Apply camera rotation to movement direction
-    if (moveDirection.length() > 0) {
-      moveDirection.normalize();
+    if (moveX !== 0 || moveZ !== 0) {
+      // Normalize diagonal movement
+      const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
+      const normalizedX = moveX / length;
+      const normalizedZ = moveZ / length;
       
       // Rotate movement based on camera angle
-      const rotatedDirection = new THREE.Vector3(
-        moveDirection.x * Math.cos(cameraRotation) - moveDirection.z * Math.sin(cameraRotation),
+      const sin = Math.sin(cameraRotation);
+      const cos = Math.cos(cameraRotation);
+      
+      direction.current.set(
+        normalizedX * cos - normalizedZ * sin,
         0,
-        moveDirection.x * Math.sin(cameraRotation) + moveDirection.z * Math.cos(cameraRotation)
+        normalizedX * sin + normalizedZ * cos
       );
       
-      direction.current.copy(rotatedDirection);
       velocity.current.lerp(direction.current.multiplyScalar(5), 0.1);
     } else {
       velocity.current.lerp(new THREE.Vector3(), 0.1);

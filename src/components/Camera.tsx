@@ -15,29 +15,20 @@ export function Camera({ target, onCameraRotation }: CameraProps) {
   useFrame(() => {
     if (!controlsRef.current) return;
 
-    // Update orbit controls target to follow player
-    controlsRef.current.target.lerp(target, 0.1);
+    // Update orbit controls target to follow player smoothly
+    const targetPos = new THREE.Vector3(target.x, target.y, target.z);
+    controlsRef.current.target.lerp(targetPos, 0.1);
     
-    // Keep camera at fixed distance from player
-    const distance = 15;
-    const height = 8;
+    // Calculate camera direction for player movement
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+    cameraDirection.y = 0;
+    cameraDirection.normalize();
     
-    const direction = new THREE.Vector3();
-    camera.getWorldDirection(direction);
-    direction.y = 0;
-    direction.normalize();
-    
-    const idealPosition = new THREE.Vector3(
-      target.x - direction.x * distance,
-      target.y + height,
-      target.z - direction.z * distance
-    );
-    
-    camera.position.lerp(idealPosition, 0.1);
-    
-    // Pass camera rotation to player for relative movement
+    // Pass camera angle to player for relative movement
     if (onCameraRotation) {
-      const angle = Math.atan2(direction.x, direction.z);
+      // Calculate angle from camera direction
+      const angle = Math.atan2(cameraDirection.x, cameraDirection.z);
       onCameraRotation(angle);
     }
   });

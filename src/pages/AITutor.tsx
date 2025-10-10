@@ -1,7 +1,15 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { HallwayScene } from "@/components/tutor/HallwayScene";
+import { useState } from "react";
 
 const AITutor = () => {
+  const [showHallway, setShowHallway] = useState(false);
+
+  if (showHallway) {
+    return <HallwayScene />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center p-8">
       <div className="max-w-2xl text-center space-y-6">
@@ -10,13 +18,24 @@ const AITutor = () => {
           Your personalized learning companion
         </p>
         <div className="p-8 border-2 rounded-xl" style={{ borderColor: "#ff4dff", backgroundColor: "rgba(255, 77, 255, 0.05)" }}>
-          <p className="text-lg text-foreground">
-            Advanced AI-powered tutoring system that adapts to your learning style,
-            provides instant feedback, and guides you through complex topics.
+          <p className="text-lg text-foreground mb-6">
+            Welcome to the AI Tutor Academy! Explore our interactive classrooms,
+            each equipped with cutting-edge technology and personalized AI assistance.
           </p>
+          <Button 
+            onClick={() => setShowHallway(true)}
+            size="lg"
+            style={{ 
+              background: "#ff4dff",
+              color: "#fff",
+              marginRight: "10px"
+            }}
+          >
+            Enter Academy Hallway
+          </Button>
         </div>
         <Link to="/">
-          <Button variant="default" size="lg">
+          <Button variant="outline" size="lg">
             Return to Portal World
           </Button>
         </Link>
