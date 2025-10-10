@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { KeyboardControls, Stars } from "@react-three/drei";
+import { KeyboardControls, Stars, Text } from "@react-three/drei";
 import * as THREE from "three";
 import { Camera } from "../Camera";
 import { TutorPlayer } from "./TutorPlayer";
@@ -122,6 +122,27 @@ function Hallway({ onDoorClick, nearDoorIndex }: { onDoorClick: (index: number) 
         <meshStandardMaterial color="#050510" />
       </mesh>
 
+      {/* Direction indicators using Text from drei */}
+      <Text
+        position={[0, 3, -28]}
+        fontSize={0.8}
+        color="#00ffff"
+        anchorX="center"
+        anchorY="middle"
+      >
+        MAIN CORRIDOR
+      </Text>
+
+      <Text
+        position={[0, 3, 18]}
+        fontSize={0.8}
+        color="#00ffff"
+        anchorX="center"
+        anchorY="middle"
+      >
+        L-SHAPED WING
+      </Text>
+
       {/* Doors with proper rotation for FPS */}
       {classrooms.map((classroom, index) => {
         let rotation: [number, number, number] = [0, 0, 0];
@@ -144,17 +165,6 @@ function Hallway({ onDoorClick, nearDoorIndex }: { onDoorClick: (index: number) 
           />
         );
       })}
-
-      {/* Direction indicators */}
-      <mesh position={[0, 3, -28]} rotation={[0, 0, 0]}>
-        <textGeometry args={["MAIN CORRIDOR", { size: 0.8, height: 0.1 }]} />
-        <meshStandardMaterial color="#00ffff" emissive="#00ffff" emissiveIntensity={0.5} />
-      </mesh>
-
-      <mesh position={[0, 3, 18]} rotation={[0, 0, 0]}>
-        <textGeometry args={["L-SHAPED WING", { size: 0.8, height: 0.1 }]} />
-        <meshStandardMaterial color="#00ffff" emissive="#00ffff" emissiveIntensity={0.5} />
-      </mesh>
 
       {/* Ceiling lights - Main corridor */}
       {Array.from({ length: 6 }).map((_, i) => (
@@ -196,7 +206,7 @@ function Scene({
   onDoorProximity: (index: number | null) => void;
   nearDoorIndex: number | null;
 }) {
-  const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, -20));
+  const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1.6, -20));
   const [cameraRotation, setCameraRotation] = useState(0);
   const [, setNearDoor] = useState<number | null>(null);
 
