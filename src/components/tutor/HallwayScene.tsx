@@ -26,13 +26,7 @@ const classroomsInput: DoorInfo[] = [
   { index: 0, label: "Mathematics", originalPosition: [-6, 0, -20], isInSession: true },
   { index: 1, label: "Physics", originalPosition: [6, 0, -20], isInSession: false },
   { index: 2, label: "Computer Science", originalPosition: [-6, 0, -10], isInSession: true },
-  { index: 3, label: "Chemistry", originalPosition: [6, 0, -10], isInSession: false },
-  { index: 4, label: "Biology", originalPosition: [-6, 0, 0], isInSession: true },
-  { index: 5, label: "Literature", originalPosition: [6, 0, 0], isInSession: false },
-  { index: 6, label: "History", originalPosition: [-6, 0, 10], isInSession: false },
-  { index: 7, label: "Art & Design", originalPosition: [6, 0, 10], isInSession: true },
-  { index: 8, label: "Robotics Lab", originalPosition: [20, 0, -8], isInSession: true },
-  { index: 9, label: "Media Room", originalPosition: [26, 0, -8], isInSession: false },
+
 ];
 
 // Corridor / geometry config
