@@ -16,16 +16,14 @@ export function Door({ position, label, isClassInSession, onClick }: DoorProps) 
         <boxGeometry args={[2.5, 4, 0.2]} />
         <meshStandardMaterial color="#2a2a2a" />
       </mesh>
-
+      
       {/* Door */}
       <mesh position={[0, 0, 0.11]}>
         <boxGeometry args={[2, 3.5, 0.1]} />
-        <meshStandardMaterial
+        <meshStandardMaterial 
           color={isClassInSession ? "#1a4d1a" : "#4d1a1a"}
           metalness={0.6}
           roughness={0.3}
-          emissive={isClassInSession ? "#003300" : "#330000"}
-          emissiveIntensity={0.4}
         />
       </mesh>
 
@@ -36,7 +34,13 @@ export function Door({ position, label, isClassInSession, onClick }: DoorProps) 
       </mesh>
 
       {/* Label above door */}
-      <Text position={[0, 2.5, 0.15]} fontSize={0.3} color="#ffffff" anchorX="center" anchorY="middle">
+      <Text
+        position={[0, 2.5, 0.15]}
+        fontSize={0.3}
+        color="#ffffff"
+        anchorX="center"
+        anchorY="middle"
+      >
         {label}
       </Text>
 
@@ -46,7 +50,7 @@ export function Door({ position, label, isClassInSession, onClick }: DoorProps) 
         <meshStandardMaterial
           color={isClassInSession ? "#00ff00" : "#ff0000"}
           emissive={isClassInSession ? "#00ff00" : "#ff0000"}
-          emissiveIntensity={1.2}
+          emissiveIntensity={0.8}
         />
       </mesh>
 

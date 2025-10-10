@@ -1,8 +1,8 @@
-import {HallwayScene} from "@/components/tutor/HallwayScene";
+import { HallwayScene } from "@/components/tutor/HallwayScene";
 
 const AITutor = () => {
   // Immediately show hallway scene (no welcome page)
-  return <HallwayScene/>;
+  return <HallwayScene />;
 };
 
 export default AITutor;
