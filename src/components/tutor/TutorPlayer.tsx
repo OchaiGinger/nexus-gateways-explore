@@ -11,44 +11,47 @@ interface TutorPlayerProps {
 
 export function TutorPlayer({ modelUrl, onPositionChange, doors }: TutorPlayerProps) {
   const { scene } = useGLTF(modelUrl);
-  const meshRef = useRef<THREE.Group>(null);
+  const playerRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
-  const forward = useKeyboardControls((state) => state.forward);
-  const backward = useKeyboardControls((state) => state.backward);
-  const left = useKeyboardControls((state) => state.left);
-  const right = useKeyboardControls((state) => state.right);
+  const forward = useKeyboardControls((s) => s.forward);
+  const backward = useKeyboardControls((s) => s.backward);
+  const left = useKeyboardControls((s) => s.left);
+  const right = useKeyboardControls((s) => s.right);
 
   useFrame((_, delta) => {
-    if (!meshRef.current) return;
+    if (!playerRef.current) return;
 
-    // Basic WASD movement
+    // Basic movement
     const moveX = (right ? 1 : 0) - (left ? 1 : 0);
     const moveZ = (backward ? 1 : 0) - (forward ? 1 : 0);
 
     direction.current.set(moveX, 0, moveZ).normalize().multiplyScalar(5);
     velocity.current.lerp(direction.current, 0.1);
 
-    meshRef.current.position.addScaledVector(velocity.current, delta);
+    playerRef.current.position.addScaledVector(velocity.current, delta);
 
-    // Keep inside hallway
-    meshRef.current.position.x = Math.max(-8, Math.min(8, meshRef.current.position.x));
-    meshRef.current.position.z = Math.max(-25, Math.min(25, meshRef.current.position.z));
+    // Stay within bounds
+    playerRef.current.position.x = Math.max(-8, Math.min(8, playerRef.current.position.x));
+    playerRef.current.position.z = Math.max(-25, Math.min(25, playerRef.current.position.z));
 
-    // Sync camera (first-person)
-    camera.position.copy(meshRef.current.position).add(new THREE.Vector3(0, 1.6, 0));
-    camera.lookAt(meshRef.current.position.clone().add(new THREE.Vector3(0, 1.6, -1)));
+    // Camera follows from chest level (see legs)
+    const cameraOffset = new THREE.Vector3(0, 1.5, 1.5);
+    const cameraPos = playerRef.current.position.clone().add(cameraOffset);
+    camera.position.lerp(cameraPos, 0.2);
+    camera.lookAt(playerRef.current.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
 
-    if (onPositionChange) onPositionChange(meshRef.current.position);
+    if (onPositionChange) onPositionChange(playerRef.current.position);
   });
 
   return (
-    <group ref={meshRef} position={[0, 1, 20]} scale={[1.2, 1.2, 1.2]}>
+    <group ref={playerRef} position={[0, 0.1, 20]} scale={[1.2, 1.2, 1.2]}>
       <primitive object={scene} />
     </group>
   );
 }
 
 useGLTF.preload("/models/character.glb");
+
 
