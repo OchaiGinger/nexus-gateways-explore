@@ -24,9 +24,9 @@ const classroomsInput: DoorInfo[] = [
   { index: 2, label: "Computer Science", originalPosition: [-6, 0, -10], isInSession: true },
   { index: 3, label: "Chemistry", originalPosition: [6, 0, -10], isInSession: false },
   { index: 4, label: "Biology", originalPosition: [-6, 0, 0], isInSession: true },
-  { index: 5, label: "Literature", originalPosition: [6, 0, 5], isInSession: false }, // MOVED from z=0 to z=5
+  { index: 5, label: "Literature", originalPosition: [6, 0, 5], isInSession: false },
   { index: 6, label: "History", originalPosition: [-6, 0, 10], isInSession: false },
-  { index: 7, label: "Art & Design", originalPosition: [6, 0, 15], isInSession: true }, // MOVED from z=10 to z=15
+  { index: 7, label: "Art & Design", originalPosition: [6, 0, 15], isInSession: true },
   { index: 8, label: "Robotics Lab", originalPosition: [20, 0, -8], isInSession: true },
   { index: 9, label: "Media Room", originalPosition: [26, 0, -8], isInSession: false },
 ];
@@ -343,11 +343,11 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
       
       {/* Right wall - split to allow L-section opening */}
       <mesh position={[10, 5, -18]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 10, 24]} /> {/* Before L-section */}
+        <boxGeometry args={[0.5, 10, 24]} />
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
       <mesh position={[10, 5, 10]} receiveShadow castShadow>
-        <boxGeometry args={[0.5, 10, 20]} /> {/* After L-section */}
+        <boxGeometry args={[0.5, 10, 20]} />
         <meshStandardMaterial color="#3a3a6a" metalness={0.1} roughness={0.6} />
       </mesh>
 
@@ -404,7 +404,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         if (zPos <= 30) {
           return (
             <group key={`main-light-${i}`} position={[0, 9.8, zPos]}>
-              <pointLight intensity={3.5} distance={20} color="#ffffff" decay={1} /> {/* Increased from 2.0 to 3.5 */}
+              <pointLight intensity={3.5} distance={20} color="#ffffff" decay={1} />
               <mesh castShadow position={[0, -0.1, 0]}>
                 <cylinderGeometry args={[0.4, 0.5, 0.2, 16]} />
                 <meshStandardMaterial 
@@ -426,7 +426,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
         const xPos = 11 + i * 4;
         return (
           <group key={`branch-light-${i}`} position={[xPos, 9.8, -8]}>
-            <pointLight intensity={2.5} distance={15} color="#ffffff" /> {/* Increased from 1.5 to 2.5 */}
+            <pointLight intensity={2.5} distance={15} color="#ffffff" />
             <mesh castShadow position={[0, -0.1, 0]}>
               <cylinderGeometry args={[0.3, 0.4, 0.2, 16]} />
               <meshStandardMaterial 
@@ -507,11 +507,11 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
       <FPSPlayerBody position={playerPos} rotation={playerRotation} />
 
       {/* ENHANCED lighting setup with increased intensity */}
-      <ambientLight intensity={1.2} color="#ffffff" /> {/* Increased from 1.0 to 1.2 */}
+      <ambientLight intensity={1.2} color="#ffffff" />
       
       <directionalLight 
         position={[0, 20, 0]} 
-        intensity={2.0}  {/* Increased from 1.5 to 2.0 */}
+        intensity={2.0}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -526,12 +526,12 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
       <hemisphereLight 
         skyColor="#a0a0ff" 
         groundColor="#404080" 
-        intensity={1.0}  {/* Increased from 0.8 to 1.0 */}
+        intensity={1.0}
       />
 
       {/* Additional fill lights with increased intensity */}
-      <pointLight position={[0, 15, 0]} intensity={0.8} distance={40} color="#ffffff" /> {/* Increased from 0.5 to 0.8 */}
-      <pointLight position={[20, 15, -8]} intensity={0.5} distance={30} color="#ffffff" /> {/* Increased from 0.3 to 0.5 */}
+      <pointLight position={[0, 15, 0]} intensity={0.8} distance={40} color="#ffffff" />
+      <pointLight position={[20, 15, -8]} intensity={0.5} distance={30} color="#ffffff" />
     </group>
   );
 }
