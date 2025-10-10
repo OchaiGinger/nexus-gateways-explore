@@ -64,18 +64,22 @@ export function Portal({ position, color, label }: PortalProps) {
         />
       </mesh>
 
-      {/* Label */}
+      {/* Label - always visible above portal */}
       <Text
-        position={[0, -2.5, 0]}
-        fontSize={0.4}
-        color={color}
+        position={[0, 3.2, 0]}
+        fontSize={0.5}
+        color="#ffffff"
         anchorX="center"
         anchorY="middle"
-        outlineWidth={0.05}
-        outlineColor="#000000"
+        outlineWidth={0.1}
+        outlineColor={color}
+        fillOpacity={1}
       >
         {label}
       </Text>
+
+      {/* Light for better visibility */}
+      <pointLight position={[0, 0, 0]} intensity={2} distance={15} color={color} />
     </group>
   );
 }

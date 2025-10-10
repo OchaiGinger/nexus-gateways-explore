@@ -158,34 +158,6 @@ export function Scene3D() {
         </Canvas>
       </KeyboardControls>
 
-      {/* Portal proximity indicator */}
-      {nearPortal && !isTransitioning && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            background: "rgba(0, 0, 0, 0.8)",
-            border: "2px solid #00ffff",
-            borderRadius: "15px",
-            padding: "20px 40px",
-            color: "#00ffff",
-            fontSize: "1.5rem",
-            fontWeight: "bold",
-            textAlign: "center",
-            zIndex: 100,
-            boxShadow: "0 0 30px rgba(0, 212, 255, 0.5)",
-            animation: "pulse 2s ease-in-out infinite",
-          }}
-        >
-          <div style={{ marginBottom: "8px" }}>🚪 {nearPortal}</div>
-          <div style={{ fontSize: "1rem", opacity: 0.8, fontWeight: "normal" }}>
-            Move closer to enter
-          </div>
-        </div>
-      )}
-
       {/* Transition overlay */}
       <PortalTransition isTransitioning={isTransitioning} portalName={transitioningPortal} />
       
