@@ -78,6 +78,7 @@ function DoorLabel({ position, label }: { position: [number, number, number]; la
           anchorY="middle"
           color="#000000"
           fontWeight="bold"
+          rotation={[0, Math.PI / 2, 0]}
         >
           {label}
         </Text>
