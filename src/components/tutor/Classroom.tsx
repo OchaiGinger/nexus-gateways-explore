@@ -10,7 +10,7 @@ interface ClassroomProps {
   onExit?: () => void;
 }
 
-export function AuditoriumClassroom({ roomName, onExit }: ClassroomProps) {
+export function Classroom({ roomName, onExit }: ClassroomProps) {
   const [nearSeatIndex, setNearSeatIndex] = useState<number | null>(null);
   const [isSitting, setIsSitting] = useState(false);
   const [sittingPosition, setSittingPosition] = useState<THREE.Vector3 | null>(null);
