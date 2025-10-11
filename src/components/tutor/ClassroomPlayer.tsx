@@ -1,213 +1,238 @@
-import { useRef, useState, useEffect } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
+import React, { useRef, useState, useEffect } from "react";
 import * as THREE from "three";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useGLTF, useAnimations } from "@react-three/drei";
 
-interface ClassroomPlayerProps {
-  onPositionChange?: (position: THREE.Vector3) => void;
-  onSeatProximity?: (seatIndex: number | null) => void;
-  seats: Array<{ position: [number, number, number] }>;
-  isSitting: boolean;
-  sittingPosition: THREE.Vector3 | null;
-  onSitRequest?: () => void;
-  onStandRequest?: () => void;
-}
-
-export function ClassroomPlayer({ 
-  onPositionChange, 
-  onSeatProximity,
+function ClassroomPlayer({
   seats,
+  onSeatProximity,
   isSitting,
   sittingPosition,
   onSitRequest,
-  onStandRequest
-}: ClassroomPlayerProps) {
-  const groupRef = useRef<THREE.Group>(null);
+  onStandRequest,
+}: {
+  seats: { position: [number, number, number] }[];
+  onSeatProximity: (index: number | null) => void;
+  isSitting: boolean;
+  sittingPosition: THREE.Vector3 | null;
+  onSitRequest: () => void;
+  onStandRequest: () => void;
+}) {
   const { camera } = useThree();
-  const [characterScene, setCharacterScene] = useState<THREE.Object3D | null>(null);
-  const [cameraRotation, setCameraRotation] = useState({ y: Math.PI, x: 0 });
-  const [isMouseDown, setIsMouseDown] = useState(false);
-  const keyState = useRef({ forward: false, backward: false, left: false, right: false });
+  const groupRef = useRef<THREE.Group>(null);
+  const characterRef = useRef<THREE.Group>(null);
+  
+  const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
+  const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 0, 5));
+  const [playerRotation, setPlayerRotation] = useState(0);
+
+  const keyState = useRef({ 
+    forward: false, 
+    backward: false, 
+    left: false, 
+    right: false 
+  });
 
   // Load character model
-  useEffect(() => {
-    try {
-      const gltf = useGLTF("/models/character.glb");
-      if (gltf && gltf.scene) {
-        gltf.scene.traverse((child: any) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-        setCharacterScene(gltf.scene);
-      }
-    } catch (err) {
-      console.error("❌ Failed to load character.glb:", err);
-    }
-  }, []);
+  const { scene, animations } = useGLTF("/models/character.glb");
+  const { actions } = useAnimations(animations, characterRef);
 
-  // Mouse controls for camera
+  // Clone the scene for proper instancing
+  const characterModel = React.useMemo(() => {
+    const model = scene.clone();
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    return model;
+  }, [scene]);
+
   useEffect(() => {
-    const handleMouseDown = () => setIsMouseDown(true);
-    const handleMouseUp = () => setIsMouseDown(false);
-    
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isMouseDown || isSitting) return;
-      
       const movementX = e.movementX || 0;
       const movementY = e.movementY || 0;
 
-      setCameraRotation(prev => ({
-        y: prev.y - movementX * 0.002,
-        x: Math.max(-Math.PI / 3, Math.min(Math.PI / 3, prev.x - movementY * 0.002))
-      }));
+      const newRotation = {
+        y: cameraRotation.y - movementX * 0.002,
+        x: Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraRotation.x - movementY * 0.002))
+      };
+
+      setCameraRotation(newRotation);
+      setPlayerRotation(newRotation.y);
     };
 
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('mousemove', handleMouseMove);
-
-    return () => {
-      document.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [isMouseDown, isSitting]);
-
-  // Keyboard controls including E for sit/stand
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === "KeyW" || e.code === "ArrowUp") keyState.current.forward = true;
       if (e.code === "KeyS" || e.code === "ArrowDown") keyState.current.backward = true;
       if (e.code === "KeyA" || e.code === "ArrowLeft") keyState.current.left = true;
       if (e.code === "KeyD" || e.code === "ArrowRight") keyState.current.right = true;
+      
+      // Sit/Stand with E key
       if (e.code === "KeyE") {
-        if (isSitting && onStandRequest) {
+        if (isSitting) {
           onStandRequest();
-        } else if (!isSitting && onSitRequest) {
+        } else if (nearSeatIndex !== null) {
           onSitRequest();
         }
       }
     };
-    const onKeyUp = (e: KeyboardEvent) => {
+
+    const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === "KeyW" || e.code === "ArrowUp") keyState.current.forward = false;
       if (e.code === "KeyS" || e.code === "ArrowDown") keyState.current.backward = false;
       if (e.code === "KeyA" || e.code === "ArrowLeft") keyState.current.left = false;
       if (e.code === "KeyD" || e.code === "ArrowRight") keyState.current.right = false;
     };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
+
+    document.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
+      document.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isSitting, onSitRequest, onStandRequest]);
+  }, [cameraRotation, isSitting, onSitRequest, onStandRequest]);
+
+  const [nearSeatIndex, setNearSeatIndex] = useState<number | null>(null);
+  const frontVector = new THREE.Vector3();
+  const sideVector = new THREE.Vector3();
+  const direction = new THREE.Vector3();
+  const tmpVec = new THREE.Vector3();
+
+  // Classroom boundaries
+  const CLASSROOM_BOUNDS = {
+    minX: -8, maxX: 8,
+    minZ: -9, maxZ: 8, // Prevent going to front stage
+    minY: 0, maxY: 10
+  };
+
+  const SEAT_DISTANCE_THRESHOLD = 1.5;
 
   useFrame((state, delta) => {
-    if (!groupRef.current) return;
-
-    // Handle sitting state
-    if (isSitting && sittingPosition) {
-      // Smoothly move camera to sitting position
-      camera.position.lerp(
-        new THREE.Vector3(sittingPosition.x, sittingPosition.y + 1.5, sittingPosition.z),
-        0.1
-      );
-      
-      // Look at the whiteboard (position at z = -9.9, y = 5)
-      const lookTarget = new THREE.Vector3(0, 5, -9.9);
-      const currentLookAt = new THREE.Vector3();
-      camera.getWorldDirection(currentLookAt);
-      currentLookAt.multiplyScalar(10).add(camera.position);
-      currentLookAt.lerp(lookTarget, 0.05);
-      camera.lookAt(currentLookAt);
-      
-      // Position character at seat
-      groupRef.current.position.copy(sittingPosition);
-      groupRef.current.rotation.y = 0; // Face forward
-      
-      return;
-    }
-
-    // Normal FPS movement when not sitting
+    // Update camera rotation
     camera.rotation.order = 'YXZ';
     camera.rotation.y = cameraRotation.y;
     camera.rotation.x = cameraRotation.x;
 
-    const frontVector = new THREE.Vector3();
-    camera.getWorldDirection(frontVector);
-    const rightVector = new THREE.Vector3().crossVectors(frontVector, camera.up).normalize();
-    
-    const direction = new THREE.Vector3(0, 0, 0);
-    
-    if (keyState.current.forward) direction.add(frontVector);
-    if (keyState.current.backward) direction.sub(frontVector);
-    if (keyState.current.right) direction.add(rightVector);
-    if (keyState.current.left) direction.sub(rightVector);
-    
-    direction.y = 0;
-    
-    const speed = 3;
-    
-    if (direction.lengthSq() > 0) {
-      direction.normalize();
-      
-      const newPos = camera.position.clone();
-      newPos.x += direction.x * speed * delta;
-      newPos.z += direction.z * speed * delta;
-      
-      // Boundary checks for classroom (20x20 room)
-      if (newPos.x > -9 && newPos.x < 9 && newPos.z > -9 && newPos.z < 9) {
-        camera.position.x = newPos.x;
-        camera.position.z = newPos.z;
-      }
-      
-      // Keep camera at eye level
-      camera.position.y = 1.6;
-      
-      // Update character position
-      groupRef.current.position.set(camera.position.x, 0, camera.position.z);
-      
-      // Rotate character to face movement direction
-      const angle = Math.atan2(direction.x, direction.z);
-      groupRef.current.rotation.y = angle;
-    }
-
-    // Check seat proximity
-    let closestSeat: number | null = null;
-    let minDistance = Infinity;
-
-    seats.forEach((seat, index) => {
-      const distance = camera.position.distanceTo(
-        new THREE.Vector3(seat.position[0], seat.position[1], seat.position[2])
+    if (isSitting && sittingPosition) {
+      // Lock position when sitting
+      camera.position.set(
+        sittingPosition.x,
+        sittingPosition.y + 1.2, // Eye level when sitting
+        sittingPosition.z
       );
       
-      if (distance < 1.5 && distance < minDistance) {
-        closestSeat = index;
-        minDistance = distance;
+      if (characterRef.current) {
+        characterRef.current.position.copy(sittingPosition);
+        characterRef.current.rotation.y = Math.PI; // Face forward when sitting
       }
-    });
+      
+      // Focus camera on whiteboard when sitting
+      camera.lookAt(0, 2, -10);
+    } else {
+      // Normal movement
+      const prevPos = playerPosition.clone();
+      
+      // Get camera forward and right vectors
+      camera.getWorldDirection(frontVector);
+      const rightVector = new THREE.Vector3().crossVectors(frontVector, camera.up).normalize();
+      
+      // Reset direction
+      direction.set(0, 0, 0);
+      
+      // Apply movement relative to camera direction
+      if (keyState.current.forward) direction.add(frontVector);
+      if (keyState.current.backward) direction.sub(frontVector);
+      if (keyState.current.right) direction.add(rightVector);
+      if (keyState.current.left) direction.sub(rightVector);
+      
+      // Remove Y component to keep movement horizontal
+      direction.y = 0;
+      
+      if (direction.lengthSq() > 0) {
+        direction.normalize();
+        
+        // Apply movement
+        const newPos = playerPosition.clone();
+        newPos.x += direction.x * 3 * delta;
+        newPos.z += direction.z * 3 * delta;
 
-    if (onSeatProximity) {
-      onSeatProximity(closestSeat);
+        // Boundary checks
+        if (newPos.x >= CLASSROOM_BOUNDS.minX && newPos.x <= CLASSROOM_BOUNDS.maxX &&
+            newPos.z >= CLASSROOM_BOUNDS.minZ && newPos.z <= CLASSROOM_BOUNDS.maxZ) {
+          setPlayerPosition(newPos);
+        }
+      }
+
+      // Update camera position (FPS view - behind character)
+      const cameraOffset = new THREE.Vector3(0, 1.6, 0.3);
+      cameraOffset.applyEuler(new THREE.Euler(0, cameraRotation.y, 0));
+      camera.position.copy(playerPosition).add(cameraOffset);
+
+      // Update character position and rotation
+      if (characterRef.current) {
+        characterRef.current.position.copy(playerPosition);
+        characterRef.current.rotation.y = playerRotation;
+      }
+
+      // Check seat proximity
+      let closestIndex: number | null = null;
+      let closestDist = Infinity;
+
+      seats.forEach((seat, i) => {
+        tmpVec.set(seat.position[0], seat.position[1], seat.position[2]);
+        const dist = tmpVec.distanceTo(playerPosition);
+        if (dist <= SEAT_DISTANCE_THRESHOLD && dist < closestDist) {
+          closestDist = dist;
+          closestIndex = i;
+        }
+      });
+
+      setNearSeatIndex(closestIndex);
+      onSeatProximity(closestIndex);
     }
 
-    if (onPositionChange) {
-      onPositionChange(camera.position);
+    // Update animations
+    if (actions) {
+      if (isSitting) {
+        if (actions.Sit) {
+          actions.Sit.play();
+          if (actions.Walk) actions.Walk.stop();
+          if (actions.Idle) actions.Idle.stop();
+        }
+      } else if (keyState.current.forward || keyState.current.backward || 
+                 keyState.current.left || keyState.current.right) {
+        if (actions.Walk) {
+          actions.Walk.play();
+          if (actions.Idle) actions.Idle.stop();
+          if (actions.Sit) actions.Sit.stop();
+        }
+      } else {
+        if (actions.Idle) {
+          actions.Idle.play();
+          if (actions.Walk) actions.Walk.stop();
+          if (actions.Sit) actions.Sit.stop();
+        }
+      }
     }
   });
 
   return (
-    <group ref={groupRef} position={[0, 0, 8]}>
-      {characterScene ? (
-        <primitive object={characterScene} scale={[1.2, 1.2, 1.2]} />
-      ) : (
-        <mesh>
-          <boxGeometry args={[0.5, 1.8, 0.5]} />
-          <meshStandardMaterial color="#00ffff" />
-        </mesh>
-      )}
+    <group ref={groupRef}>
+      {/* 3D Character */}
+      <group ref={characterRef} position={playerPosition} rotation={[0, playerRotation, 0]}>
+        <primitive 
+          object={characterModel} 
+          scale={0.8}
+          rotation={[0, Math.PI, 0]} // Face forward initially
+        />
+      </group>
     </group>
   );
 }
+
+export default ClassroomPlayer;
