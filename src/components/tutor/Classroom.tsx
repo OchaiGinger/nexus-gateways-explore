@@ -1,257 +1,472 @@
-import React, { useRef, useState, useEffect } from "react";
-import * as THREE from "three";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useGLTF, useAnimations } from "@react-three/drei";
+import React, { useState, useMemo } from 'react';
+import * as THREE from 'three';
+import { Canvas } from '@react-three/fiber';
+import { Text } from '@react-three/drei';
+import { AuditoriumDesk } from './AuditoriumDesk';
+import ClassroomPlayer from './ClassroomPlayer';
 
-function ClassroomPlayer({
-  seats,
-  onSeatProximity,
-  isSitting,
-  sittingPosition,
-  onSitRequest,
-  onStandRequest,
-}: {
-  seats: { position: [number, number, number]; isOccupied: boolean }[];
-  onSeatProximity: (index: number | null) => void;
-  isSitting: boolean;
-  sittingPosition: THREE.Vector3 | null;
-  onSitRequest: () => void;
-  onStandRequest: () => void;
-}) {
-  const { camera } = useThree();
-  const groupRef = useRef<THREE.Group>(null);
-  const characterRef = useRef<THREE.Group>(null);
-  
-  const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
-  const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 0, 8));
-  const [playerRotation, setPlayerRotation] = useState(0);
-  const [isMouseDown, setIsMouseDown] = useState(false);
+interface ClassroomProps {
+  roomName: string;
+  onExit?: () => void;
+}
 
-  const keyState = useRef({ 
-    forward: false, 
-    backward: false, 
-    left: false, 
-    right: false 
-  });
-
-  // Load character model
-  const { scene, animations } = useGLTF("/models/character.glb");
-  const { actions } = useAnimations(animations, characterRef);
-
-  // Clone the scene for proper instancing
-  const characterModel = React.useMemo(() => {
-    const model = scene.clone();
-    model.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-    return model;
-  }, [scene]);
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isMouseDown) return;
-      
-      const movementX = e.movementX || 0;
-      const movementY = e.movementY || 0;
-
-      const newRotation = {
-        y: cameraRotation.y - movementX * 0.002,
-        x: Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraRotation.x - movementY * 0.002))
-      };
-
-      setCameraRotation(newRotation);
-      setPlayerRotation(newRotation.y);
-    };
-
-    const handleMouseDown = (e: MouseEvent) => {
-      if (e.button === 0) {
-        setIsMouseDown(true);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsMouseDown(false);
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "KeyW" || e.code === "ArrowUp") keyState.current.forward = true;
-      if (e.code === "KeyS" || e.code === "ArrowDown") keyState.current.backward = true;
-      if (e.code === "KeyA" || e.code === "ArrowLeft") keyState.current.left = true;
-      if (e.code === "KeyD" || e.code === "ArrowRight") keyState.current.right = true;
-      
-      // Sit/Stand with E key
-      if (e.code === "KeyE") {
-        if (isSitting) {
-          onStandRequest();
-        } else if (nearSeatIndex !== null && !seats[nearSeatIndex].isOccupied) {
-          onSitRequest();
-        }
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "KeyW" || e.code === "ArrowUp") keyState.current.forward = false;
-      if (e.code === "KeyS" || e.code === "ArrowDown") keyState.current.backward = false;
-      if (e.code === "KeyA" || e.code === "ArrowLeft") keyState.current.left = false;
-      if (e.code === "KeyD" || e.code === "ArrowRight") keyState.current.right = false;
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, [cameraRotation, isSitting, isMouseDown, onSitRequest, onStandRequest, seats]);
-
+export function AuditoriumClassroom({ roomName, onExit }: ClassroomProps) {
   const [nearSeatIndex, setNearSeatIndex] = useState<number | null>(null);
-  const frontVector = new THREE.Vector3();
-  const sideVector = new THREE.Vector3();
-  const direction = new THREE.Vector3();
-  const tmpVec = new THREE.Vector3();
+  const [isSitting, setIsSitting] = useState(false);
+  const [sittingPosition, setSittingPosition] = useState<THREE.Vector3 | null>(null);
 
-  // Auditorium boundaries
-  const AUDITORIUM_BOUNDS = {
-    minX: -12, maxX: 12,
-    minZ: -15, maxZ: 10,
-    minY: 0, maxY: 15
+  // Generate auditorium seats with random occupancy
+  const seatPositions = useMemo(() => {
+    const seats: { position: [number, number, number]; isOccupied: boolean }[] = [];
+    const rows = 8;
+    const seatsPerRow = 12;
+    const rowSpacing = 2.5;
+    const seatSpacing = 1.8;
+    const centerAisle = 3;
+    
+    // Create stepped seating (descending towards front)
+    for (let row = 0; row < rows; row++) {
+      const z = 6 - row * rowSpacing; // Move forward (negative Z) as row increases
+      const y = -row * 0.4; // Step down each row
+      
+      // Left section
+      for (let seat = 0; seat < seatsPerRow / 2; seat++) {
+        const x = -((seatsPerRow / 2) * seatSpacing / 2) + seat * seatSpacing;
+        const isOccupied = Math.random() < 0.3; // 30% chance of being occupied
+        seats.push({ position: [x, y, z], isOccupied });
+      }
+      
+      // Right section (skip center aisle)
+      for (let seat = 0; seat < seatsPerRow / 2; seat++) {
+        const x = centerAisle / 2 + seat * seatSpacing;
+        const isOccupied = Math.random() < 0.3; // 30% chance of being occupied
+        seats.push({ position: [x, y, z], isOccupied });
+      }
+    }
+    
+    return seats;
+  }, []);
+
+  const handleSitDown = () => {
+    if (nearSeatIndex !== null && !seatPositions[nearSeatIndex].isOccupied) {
+      const seatPos = seatPositions[nearSeatIndex].position;
+      // Position slightly in front of the desk when sitting
+      const sitPos = new THREE.Vector3(seatPos[0], seatPos[1] + 0.5, seatPos[2] - 0.3);
+      setSittingPosition(sitPos);
+      setIsSitting(true);
+    }
   };
 
-  const SEAT_DISTANCE_THRESHOLD = 1.5;
-
-  useFrame((state, delta) => {
-    // Update camera rotation
-    camera.rotation.order = 'YXZ';
-    camera.rotation.y = cameraRotation.y;
-    camera.rotation.x = cameraRotation.x;
-
-    if (isSitting && sittingPosition) {
-      // Lock position when sitting
-      camera.position.set(
-        sittingPosition.x,
-        sittingPosition.y + 1.2, // Eye level when sitting
-        sittingPosition.z
-      );
-      
-      if (characterRef.current) {
-        characterRef.current.position.copy(sittingPosition);
-        characterRef.current.rotation.y = Math.PI; // Face forward when sitting
-      }
-      
-      // Focus camera on stage when sitting
-      camera.lookAt(0, 2, -16);
-    } else {
-      // Normal movement
-      const prevPos = playerPosition.clone();
-      
-      // Get camera forward and right vectors
-      camera.getWorldDirection(frontVector);
-      const rightVector = new THREE.Vector3().crossVectors(frontVector, camera.up).normalize();
-      
-      // Reset direction
-      direction.set(0, 0, 0);
-      
-      // Apply movement relative to camera direction
-      if (keyState.current.forward) direction.add(frontVector);
-      if (keyState.current.backward) direction.sub(frontVector);
-      if (keyState.current.right) direction.add(rightVector);
-      if (keyState.current.left) direction.sub(rightVector);
-      
-      // Remove Y component to keep movement horizontal
-      direction.y = 0;
-      
-      if (direction.lengthSq() > 0) {
-        direction.normalize();
-        
-        // Apply movement
-        const newPos = playerPosition.clone();
-        newPos.x += direction.x * 4 * delta;
-        newPos.z += direction.z * 4 * delta;
-
-        // Boundary checks
-        if (newPos.x >= AUDITORIUM_BOUNDS.minX && newPos.x <= AUDITORIUM_BOUNDS.maxX &&
-            newPos.z >= AUDITORIUM_BOUNDS.minZ && newPos.z <= AUDITORIUM_BOUNDS.maxZ) {
-          setPlayerPosition(newPos);
-        }
-      }
-
-      // Update character position and rotation
-      if (characterRef.current) {
-        characterRef.current.position.copy(playerPosition);
-        characterRef.current.rotation.y = playerRotation;
-      }
-
-      // FPS Camera - position behind and above character
-      const cameraOffset = new THREE.Vector3(0, 1.6, 0.3);
-      cameraOffset.applyEuler(new THREE.Euler(0, cameraRotation.y, 0));
-      camera.position.copy(playerPosition).add(cameraOffset);
-
-      // Check seat proximity (only for unoccupied seats)
-      let closestIndex: number | null = null;
-      let closestDist = Infinity;
-
-      seats.forEach((seat, i) => {
-        if (seat.isOccupied) return; // Skip occupied seats
-        
-        tmpVec.set(seat.position[0], seat.position[1], seat.position[2]);
-        const dist = tmpVec.distanceTo(playerPosition);
-        if (dist <= SEAT_DISTANCE_THRESHOLD && dist < closestDist) {
-          closestDist = dist;
-          closestIndex = i;
-        }
-      });
-
-      setNearSeatIndex(closestIndex);
-      onSeatProximity(closestIndex);
-    }
-
-    // Update animations
-    if (actions) {
-      if (isSitting) {
-        if (actions.Sit) {
-          actions.Sit.play();
-          if (actions.Walk) actions.Walk.stop();
-          if (actions.Idle) actions.Idle.stop();
-        }
-      } else if (keyState.current.forward || keyState.current.backward || 
-                 keyState.current.left || keyState.current.right) {
-        if (actions.Walk) {
-          actions.Walk.play();
-          if (actions.Idle) actions.Idle.stop();
-          if (actions.Sit) actions.Sit.stop();
-        }
-      } else {
-        if (actions.Idle) {
-          actions.Idle.play();
-          if (actions.Walk) actions.Walk.stop();
-          if (actions.Sit) actions.Sit.stop();
-        }
-      }
-    }
-  });
+  const handleStandUp = () => {
+    setIsSitting(false);
+    setSittingPosition(null);
+  };
 
   return (
-    <group ref={groupRef}>
-      {/* 3D Character */}
-      <group ref={characterRef} position={playerPosition} rotation={[0, playerRotation, 0]}>
-        <primitive 
-          object={characterModel} 
-          scale={0.8}
-          rotation={[0, Math.PI, 0]} // Face forward initially
+    <div style={{ width: '100vw', height: '100vh', background: '#000', cursor: isMouseDown ? 'grabbing' : 'grab' }}>
+      <Canvas 
+        shadows 
+        camera={{ position: [0, 1.6, 8], fov: 75 }}
+        gl={{ antialias: true }}
+      >
+        <AuditoriumScene 
+          roomName={roomName} 
+          seatPositions={seatPositions}
+          nearSeatIndex={nearSeatIndex} 
+          isSitting={isSitting}
         />
+        <ClassroomPlayer 
+          seats={seatPositions}
+          onSeatProximity={setNearSeatIndex}
+          isSitting={isSitting}
+          sittingPosition={sittingPosition}
+          onSitRequest={handleSitDown}
+          onStandRequest={handleStandUp}
+        />
+      </Canvas>
+      
+      {/* Exit button overlay */}
+      <button
+        onClick={onExit}
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          padding: '12px 24px',
+          background: 'linear-gradient(45deg, #ff4444, #ff6b6b)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          fontSize: '16px',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          zIndex: 100,
+          boxShadow: '0 4px 15px rgba(255, 68, 68, 0.4)'
+        }}
+      >
+        Exit Auditorium
+      </button>
+
+      {/* Classroom info */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '20px',
+          left: '20px',
+          background: 'rgba(255, 255, 255, 0.9)',
+          padding: '15px',
+          borderRadius: '10px',
+          border: '2px solid #00ffff',
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          fontWeight: 'bold'
+        }}
+      >
+        <div style={{ marginBottom: '5px' }}>🏫 {roomName}</div>
+        <div>📍 Auditorium Style</div>
+        <div>👥 {seatPositions.length} Seats</div>
+        {isSitting && <div style={{ marginTop: '5px', color: '#00aa00' }}>✓ Seated - Focus on Stage</div>}
+      </div>
+
+      {/* Controls hint */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '25px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(255, 255, 255, 0.9)',
+          padding: '12px 25px',
+          color: '#000000',
+          borderRadius: '10px',
+          border: '2px solid #00ffff',
+          zIndex: 40,
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          boxShadow: '0 0 20px rgba(0, 255, 255, 0.5)'
+        }}
+      >
+        {isSitting ? (
+          <div>Press E to stand up • Focus on the stage</div>
+        ) : (
+          <div>🖱️ Click & drag to look • 🎮 WASD to move • 💺 Get close to empty seat and press E to sit</div>
+        )}
+      </div>
+
+      {/* Seat prompt - Only show for unoccupied seats */}
+      {!isSitting && nearSeatIndex !== null && !seatPositions[nearSeatIndex].isOccupied && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(255, 255, 255, 0.95)',
+            color: '#000000',
+            padding: '20px 30px',
+            borderRadius: '15px',
+            border: '3px solid #00ffff',
+            zIndex: 50,
+            textAlign: 'center',
+            boxShadow: '0 0 30px rgba(0, 255, 255, 0.8)',
+          }}
+        >
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '10px' }}>
+            💺 Seat Available
+          </div>
+          <div style={{ marginBottom: '15px', fontSize: '1rem' }}>
+            Press E to sit down and focus on the stage
+          </div>
+          <button
+            onClick={handleSitDown}
+            style={{
+              padding: '12px 24px',
+              borderRadius: '10px',
+              border: 'none',
+              background: 'linear-gradient(45deg, #00ffff, #0088ff)',
+              color: '#000',
+              fontWeight: 700,
+              fontSize: '1.1rem',
+              cursor: 'pointer',
+              boxShadow: '0 0 15px rgba(0, 255, 255, 0.5)'
+            }}
+          >
+            Sit Down (E)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AuditoriumScene({ 
+  roomName, 
+  seatPositions,
+  nearSeatIndex,
+  isSitting 
+}: { 
+  roomName: string; 
+  seatPositions: { position: [number, number, number]; isOccupied: boolean }[];
+  nearSeatIndex: number | null;
+  isSitting: boolean;
+}) {
+  return (
+    <group>
+      {/* Enhanced Floor with curved pattern */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
+        <planeGeometry args={[30, 30]} />
+        <meshStandardMaterial 
+          color="#1a1a2a" 
+          roughness={0.8}
+          metalness={0.1}
+        />
+      </mesh>
+
+      {/* Curved floor steps */}
+      {Array.from({ length: 8 }, (_, i) => (
+        <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[0, -i * 0.4 - 2.2, 6 - i * 2.5]} receiveShadow>
+          <ringGeometry args={[12, 15, 32, 1, 0, Math.PI]} />
+          <meshStandardMaterial color="#2a2a3a" roughness={0.7} />
+        </mesh>
+      ))}
+
+      {/* Enhanced Walls - Curved back wall */}
+      <mesh position={[0, 5, 12]} receiveShadow castShadow>
+        <cylinderGeometry args={[16, 16, 10, 32, 1, true, 0, Math.PI]} />
+        <meshStandardMaterial color="#2a2a4a" roughness={0.7} />
+      </mesh>
+
+      {/* Side walls */}
+      <mesh position={[-15, 5, 0]} receiveShadow castShadow>
+        <boxGeometry args={[0.3, 10, 30]} />
+        <meshStandardMaterial color="#2a2a4a" roughness={0.7} />
+      </mesh>
+      <mesh position={[15, 5, 0]} receiveShadow castShadow>
+        <boxGeometry args={[0.3, 10, 30]} />
+        <meshStandardMaterial color="#2a2a4a" roughness={0.7} />
+      </mesh>
+
+      {/* Front wall with stage */}
+      <mesh position={[0, 5, -16]} receiveShadow castShadow>
+        <boxGeometry args={[30, 10, 0.3]} />
+        <meshStandardMaterial color="#2a2a4a" roughness={0.7} />
+      </mesh>
+
+      {/* Grand Stage */}
+      <group position={[0, -0.5, -14]}>
+        {/* Stage platform */}
+        <mesh position={[0, 0.5, 0]} receiveShadow castShadow>
+          <boxGeometry args={[12, 1, 4]} />
+          <meshStandardMaterial color="#5a4a3a" roughness={0.6} />
+        </mesh>
+        
+        {/* Stage front */}
+        <mesh position={[0, 0, 2]} receiveShadow castShadow>
+          <boxGeometry args={[12.2, 0.2, 0.5]} />
+          <meshStandardMaterial color="#8B4513" roughness={0.5} />
+        </mesh>
+
+        {/* Stage steps */}
+        {[2.5, 3.5].map((z, i) => (
+          <mesh key={i} position={[0, -0.2 * (i + 1), z]} receiveShadow castShadow>
+            <boxGeometry args={[13 + i, 0.2, 1]} />
+            <meshStandardMaterial color="#6a5a4a" roughness={0.7} />
+          </mesh>
+        ))}
+
+        {/* Podium */}
+        <mesh position={[0, 1.2, -1]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.8, 1, 1.2, 16]} />
+          <meshStandardMaterial color="#8B4513" roughness={0.6} />
+        </mesh>
+        <mesh position={[0, 1.8, -1]} castShadow receiveShadow>
+          <boxGeometry args={[1, 0.1, 1]} />
+          <meshStandardMaterial color="#5a3a2a" roughness={0.5} />
+        </mesh>
+
+        {/* Presentation screen */}
+        <mesh position={[0, 4, -1.5]} castShadow receiveShadow>
+          <boxGeometry args={[8, 4, 0.1]} />
+          <meshStandardMaterial color="#000011" emissive="#001133" emissiveIntensity={0.3} />
+        </mesh>
+        <mesh position={[0, 4, -1.45]} castShadow>
+          <boxGeometry args={[8.2, 4.2, 0.1]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
       </group>
+
+      {/* Enhanced Ceiling - Domed */}
+      <mesh position={[0, 12, 0]} receiveShadow castShadow>
+        <sphereGeometry args={[18, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color="#4a4a6a" roughness={0.9} metalness={0.1} />
+      </mesh>
+
+      {/* Room title above stage */}
+      <Text
+        position={[0, 8, -15.7]}
+        fontSize={0.8}
+        color="#00ffff"
+        anchorX="center"
+        anchorY="middle"
+        fontWeight="bold"
+      >
+        {roomName} AUDITORIUM
+      </Text>
+
+      {/* Exit signs */}
+      <group position={[0, 8, 11.7]}>
+        <mesh position={[0, 0, 0]} castShadow>
+          <boxGeometry args={[2, 0.6, 0.1]} />
+          <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.5} />
+        </mesh>
+        <Text
+          position={[0, 0, 0.05]}
+          fontSize={0.3}
+          color="#ffffff"
+          anchorX="center"
+          anchorY="middle"
+          fontWeight="bold"
+        >
+          EXIT
+        </Text>
+      </group>
+
+      {/* Side exit signs */}
+      <group position={[-14, 8, 0]} rotation={[0, Math.PI/2, 0]}>
+        <mesh castShadow>
+          <boxGeometry args={[1.5, 0.5, 0.1]} />
+          <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.5} />
+        </mesh>
+        <Text
+          position={[0, 0, 0.05]}
+          fontSize={0.25}
+          color="#ffffff"
+          anchorX="center"
+          anchorY="middle"
+          fontWeight="bold"
+        >
+          EXIT
+        </Text>
+      </group>
+      <group position={[14, 8, 0]} rotation={[0, -Math.PI/2, 0]}>
+        <mesh castShadow>
+          <boxGeometry args={[1.5, 0.5, 0.1]} />
+          <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={0.5} />
+        </mesh>
+        <Text
+          position={[0, 0, 0.05]}
+          fontSize={0.25}
+          color="#ffffff"
+          anchorX="center"
+          anchorY="middle"
+          fontWeight="bold"
+        >
+          EXIT
+        </Text>
+      </group>
+
+      {/* Auditorium seats */}
+      {seatPositions.map((seat, index) => (
+        <Desk
+          key={index}
+          position={seat.position}
+          isOccupied={seat.isOccupied}
+          isHighlighted={nearSeatIndex === index && !seat.isOccupied}
+        />
+      ))}
+
+      {/* Enhanced ceiling lights - theater style */}
+      {Array.from({ length: 5 }, (_, i) => 
+        Array.from({ length: 3 }, (_, j) => (
+          <group key={`${i}-${j}`} position={[-8 + i * 4, 10, -8 + j * 4]}>
+            <pointLight intensity={3} distance={15} color="#ffffff" decay={1} />
+            <mesh castShadow>
+              <cylinderGeometry args={[0.6, 0.8, 0.4, 16]} />
+              <meshStandardMaterial 
+                color="#ffffff" 
+                emissive="#ffffff" 
+                emissiveIntensity={0.4}
+                metalness={0.2}
+                roughness={0.3}
+              />
+            </mesh>
+            <mesh position={[0, -0.3, 0]} castShadow>
+              <cylinderGeometry args={[0.5, 0.5, 0.1, 16]} />
+              <meshStandardMaterial 
+                color="#ffffff" 
+                emissive="#ffffff" 
+                emissiveIntensity={0.6}
+              />
+            </mesh>
+          </group>
+        ))
+      )}
+
+      {/* Stage lighting */}
+      <group position={[0, 8, -10]}>
+        <spotLight
+          intensity={5}
+          distance={20}
+          angle={Math.PI / 4}
+          penumbra={0.5}
+          color="#ffffff"
+          position={[0, 2, 0]}
+          target-position={[0, 0, -4]}
+          castShadow
+        />
+        <mesh position={[0, 2, 0]} castShadow>
+          <cylinderGeometry args={[0.3, 0.5, 0.5, 16]} />
+          <meshStandardMaterial color="#333333" />
+        </mesh>
+      </group>
+
+      {/* Side stage lights */}
+      {[-5, 5].map((x) => (
+        <group key={x} position={[x, 6, -12]}>
+          <spotLight
+            intensity={4}
+            distance={15}
+            angle={Math.PI / 6}
+            penumbra={0.3}
+            color="#ffffee"
+            position={[0, 0, 0]}
+            target-position={[0, -2, -2]}
+          />
+          <mesh castShadow>
+            <cylinderGeometry args={[0.2, 0.3, 0.3, 16]} />
+            <meshStandardMaterial color="#222222" />
+          </mesh>
+        </group>
+      ))}
+
+      {/* Enhanced lighting setup */}
+      <ambientLight intensity={0.6} color="#ffffff" />
+      
+      <directionalLight
+        position={[0, 20, 10]}
+        intensity={1.5}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-far={50}
+        shadow-camera-left={-20}
+        shadow-camera-right={20}
+        shadow-camera-top={20}
+        shadow-camera-bottom={-20}
+        color="#ffffff"
+      />
+      
+      <hemisphereLight 
+        skyColor="#a0a0ff" 
+        groundColor="#404080" 
+        intensity={0.4}
+      />
+
+      {/* Additional fill lights */}
+      <pointLight position={[0, 15, 0]} intensity={0.5} distance={25} color="#ffffff" />
     </group>
   );
 }
 
-export default ClassroomPlayer;
+export default Classroom;
