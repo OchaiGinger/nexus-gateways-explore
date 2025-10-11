@@ -1,83 +1,60 @@
-import * as THREE from "three";
+import React from 'react';
+import * as THREE from 'three';
 
 interface DeskProps {
   position: [number, number, number];
-  rotation?: [number, number, number];
   isOccupied?: boolean;
 }
 
-export function Desk({ position, rotation = [0, 0, 0], isOccupied = false }: DeskProps) {
+export function Desk({ position, isOccupied = false }: DeskProps) {
   return (
-    <group position={position} rotation={rotation}>
+    <group position={position}>
       {/* Desk top */}
-      <mesh position={[0, 0.75, 0]} castShadow>
-        <boxGeometry args={[1.2, 0.05, 0.8]} />
-        <meshStandardMaterial 
-          color="#8b7355"
-          roughness={0.7}
-          metalness={0.1}
-        />
+      <mesh position={[0, 0.9, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.8, 0.05, 0.4]} />
+        <meshStandardMaterial color="#5a3a2a" />
+      </mesh>
+      
+      {/* Desk legs */}
+      <mesh position={[-0.35, 0.45, -0.15]} castShadow>
+        <cylinderGeometry args={[0.03, 0.03, 0.9, 8]} />
+        <meshStandardMaterial color="#2a2a2a" />
+      </mesh>
+      <mesh position={[0.35, 0.45, -0.15]} castShadow>
+        <cylinderGeometry args={[0.03, 0.03, 0.9, 8]} />
+        <meshStandardMaterial color="#2a2a2a" />
+      </mesh>
+      <mesh position={[-0.35, 0.45, 0.15]} castShadow>
+        <cylinderGeometry args={[0.03, 0.03, 0.9, 8]} />
+        <meshStandardMaterial color="#2a2a2a" />
+      </mesh>
+      <mesh position={[0.35, 0.45, 0.15]} castShadow>
+        <cylinderGeometry args={[0.03, 0.03, 0.9, 8]} />
+        <meshStandardMaterial color="#2a2a2a" />
       </mesh>
 
-      {/* Desk legs */}
-      {[
-        [-0.5, 0, -0.35],
-        [0.5, 0, -0.35],
-        [-0.5, 0, 0.35],
-        [0.5, 0, 0.35],
-      ].map((pos, i) => (
-        <mesh key={i} position={pos as [number, number, number]} castShadow>
-          <cylinderGeometry args={[0.05, 0.05, 0.75, 16]} />
-          <meshStandardMaterial color="#4a4a4a" />
-        </mesh>
-      ))}
-
       {/* Chair */}
-      <group position={[0, 0, 0.6]}>
-        {/* Seat */}
-        <mesh position={[0, 0.5, 0]} castShadow>
-          <boxGeometry args={[0.5, 0.05, 0.5]} />
-          <meshStandardMaterial 
-            color={isOccupied ? "#ff6b6b" : "#4a90e2"}
-            roughness={0.6}
-          />
+      <group position={[0, 0, 0.3]}>
+        <mesh position={[0, 0.4, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.4, 0.05, 0.4]} />
+          <meshStandardMaterial color="#3a2a1a" />
         </mesh>
-
-        {/* Backrest */}
-        <mesh position={[0, 0.75, -0.2]} castShadow>
-          <boxGeometry args={[0.5, 0.5, 0.05]} />
-          <meshStandardMaterial 
-            color={isOccupied ? "#ff6b6b" : "#4a90e2"}
-            roughness={0.6}
-          />
+        <mesh position={[0, 0.2, -0.15]} castShadow receiveShadow>
+          <boxGeometry args={[0.4, 0.4, 0.05]} />
+          <meshStandardMaterial color="#3a2a1a" />
         </mesh>
-
-        {/* Chair legs */}
-        {[
-          [-0.2, 0, -0.2],
-          [0.2, 0, -0.2],
-          [-0.2, 0, 0.2],
-          [0.2, 0, 0.2],
-        ].map((pos, i) => (
-          <mesh key={i} position={pos as [number, number, number]} castShadow>
-            <cylinderGeometry args={[0.03, 0.03, 0.5, 16]} />
-            <meshStandardMaterial color="#2a2a2a" />
-          </mesh>
-        ))}
+        <mesh position={[0, 0.2, 0]} castShadow>
+          <cylinderGeometry args={[0.03, 0.03, 0.4, 8]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
       </group>
 
-      {/* Laptop on desk */}
-      {!isOccupied && (
-        <group position={[0, 0.78, 0]}>
-          <mesh rotation={[-Math.PI * 0.1, 0, 0]} castShadow>
-            <boxGeometry args={[0.4, 0.3, 0.02]} />
-            <meshStandardMaterial color="#1a1a1a" emissive="#00ffff" emissiveIntensity={0.1} />
-          </mesh>
-          <mesh position={[0, -0.15, 0.15]} castShadow>
-            <boxGeometry args={[0.4, 0.02, 0.3]} />
-            <meshStandardMaterial color="#2a2a2a" />
-          </mesh>
-        </group>
+      {/* Student indicator if occupied */}
+      {isOccupied && (
+        <mesh position={[0, 1.2, 0]} castShadow>
+          <sphereGeometry args={[0.15, 8, 8]} />
+          <meshStandardMaterial color="#ff6b6b" />
+        </mesh>
       )}
     </group>
   );
