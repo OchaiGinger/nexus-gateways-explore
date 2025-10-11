@@ -4,7 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text, Stars } from "@react-three/drei";
 
 /**
- * Fixed HallwayScene with proper lighting, door labels, positioning, and collision
+ * Fixed HallwayScene with no cursor and proper orbit controls
  */
 
 // -----------------------------
@@ -511,7 +511,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
 }
 
 // -----------------------------
-// FIXED TutorPlayer with proper camera-relative movement and pointer lock fixes
+// FIXED TutorPlayer with NO cursor but maintaining orbit controls
 // -----------------------------
 
 function TutorPlayer({
@@ -519,27 +519,23 @@ function TutorPlayer({
   onPositionChange,
   onDoorProximity,
   onRotationChange,
-  onMouseDownChange,
   speed = 3,
 }: {
   doors: { position: [number, number, number] }[];
   onPositionChange: (p: THREE.Vector3) => void;
   onDoorProximity: (index: number | null) => void;
   onRotationChange: (rotation: number) => void;
-  onMouseDownChange: (isDown: boolean) => void;
   speed?: number;
 }) {
   const { camera } = useThree();
   
   const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
-  const [isPointerLocked, setIsPointerLocked] = useState(false);
 
   const keyState = useRef({ forward: false, backward: false, left: false, right: false });
   
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isPointerLocked) return;
-      
+      // Always handle mouse movement for orbit controls, no pointer lock needed
       const movementX = e.movementX || 0;
       const movementY = e.movementY || 0;
 
@@ -552,47 +548,12 @@ function TutorPlayer({
       onRotationChange(newRotation.y);
     };
 
-    const handleMouseDown = (e: MouseEvent) => {
-      if (e.button === 0) {
-        onMouseDownChange(true);
-        // Request pointer lock for better mouse control
-        if (!document.pointerLockElement) {
-          document.body.requestPointerLock();
-        }
-      }
-    };
-
-    const handleMouseUp = () => {
-      onMouseDownChange(false);
-      // Exit pointer lock when mouse is released
-      if (document.pointerLockElement) {
-        document.exitPointerLock();
-      }
-    };
-
-    const handlePointerLockChange = () => {
-      const locked = !!document.pointerLockElement;
-      setIsPointerLocked(locked);
-      onMouseDownChange(locked);
-      
-      if (!locked) {
-        // Reset cursor style when pointer lock is lost
-        document.body.style.cursor = "grab";
-      }
-    };
-
     document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('pointerlockchange', handlePointerLockChange);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('pointerlockchange', handlePointerLockChange);
     };
-  }, [cameraRotation, onRotationChange, onMouseDownChange, isPointerLocked]);
+  }, [cameraRotation, onRotationChange]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -709,7 +670,7 @@ function TutorPlayer({
 }
 
 // -----------------------------
-// Main Updated Scene with FIXED door positions and labels
+// Main Updated Scene with NO cursor
 // -----------------------------
 
 export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (index: number) => void }) {
@@ -741,7 +702,6 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
   const [nearDoorIndex, setNearDoorIndex] = useState<number | null>(null);
   const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1.6, 20));
   const [playerRotation, setPlayerRotation] = useState(0);
-  const [isMouseDown, setIsMouseDown] = useState(false);
 
   const handleDoorClick = (index: number) => {
     if (onEnterClassroom) {
@@ -757,7 +717,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       top: 0, 
       left: 0,
       background: "#000000",
-      cursor: isMouseDown ? "none" : "grab" // Hide cursor when mouse is down
+      cursor: "none" // NO CURSOR - completely removed
     }}>
       <Canvas 
         shadows 
@@ -780,7 +740,6 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           onPositionChange={(p) => setPlayerPos(p)}
           onDoorProximity={(idx) => setNearDoorIndex(idx)}
           onRotationChange={(rotation) => setPlayerRotation(rotation)}
-          onMouseDownChange={setIsMouseDown}
           speed={3}
         />
       </Canvas>
@@ -860,7 +819,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           boxShadow: "0 0 20px rgba(0, 255, 255, 0.5)"
         }}
       >
-        <div>🖱️ Click + Drag to look • 🎮 WASD to move • 🚪 Look at doors to interact</div>
+        <div>🖱️ Move mouse to look around • 🎮 WASD to move • 🚪 Look at doors to interact</div>
         <div style={{ marginTop: "5px", fontSize: "12px" }}>
           🔴 Look down to see your position marker and feet
         </div>
@@ -885,7 +844,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       >
         <div style={{ marginBottom: "5px" }}>🏫 ACADEMIC WING</div>
         <div>📍 10 Classrooms</div>
-        <div>🎯 -Shaped Layout</div>
+        <div>🎯 L-Shaped Layout</div>
         <div style={{ marginTop: "5px", color: "#ff0000", fontSize: "12px" }}>
           🔺 Look down to see position marker
         </div>
