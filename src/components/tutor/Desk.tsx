@@ -4,16 +4,35 @@ import * as THREE from 'three';
 interface DeskProps {
   position: [number, number, number];
   isOccupied?: boolean;
+  isHighlighted?: boolean;
 }
 
-export function Desk({ position, isOccupied = false }: DeskProps) {
+export function Desk({ position, isOccupied = false, isHighlighted = false }: DeskProps) {
   return (
     <group position={position}>
       {/* Desk top */}
       <mesh position={[0, 0.9, 0]} castShadow receiveShadow>
         <boxGeometry args={[0.8, 0.05, 0.4]} />
-        <meshStandardMaterial color="#5a3a2a" />
+        <meshStandardMaterial 
+          color={isHighlighted ? "#4a9a6a" : "#5a3a2a"}
+          metalness={0.3}
+          roughness={0.6}
+          emissive={isHighlighted ? "#00ff88" : "#000000"}
+          emissiveIntensity={isHighlighted ? 0.3 : 0}
+        />
       </mesh>
+      
+      {/* Highlight glow when near */}
+      {isHighlighted && (
+        <mesh position={[0, 0.95, 0]}>
+          <boxGeometry args={[0.9, 0.1, 0.5]} />
+          <meshBasicMaterial 
+            color="#00ff88" 
+            transparent 
+            opacity={0.3}
+          />
+        </mesh>
+      )}
       
       {/* Desk legs */}
       <mesh position={[-0.35, 0.45, -0.15]} castShadow>

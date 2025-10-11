@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import * as THREE from 'three';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
 import { Desk } from './Desk';
+import { ClassroomPlayer } from './ClassroomPlayer';
 
 interface ClassroomProps {
   roomName: string;
@@ -10,10 +11,58 @@ interface ClassroomProps {
 }
 
 export function Classroom({ roomName, onExit }: ClassroomProps) {
+  const [nearSeatIndex, setNearSeatIndex] = useState<number | null>(null);
+  const [isSitting, setIsSitting] = useState(false);
+  const [sittingPosition, setSittingPosition] = useState<THREE.Vector3 | null>(null);
+
+  const handleSitDown = () => {
+    if (nearSeatIndex !== null) {
+      const seatPos = seatPositions[nearSeatIndex].position;
+      setSittingPosition(new THREE.Vector3(seatPos[0], seatPos[1], seatPos[2]));
+      setIsSitting(true);
+    }
+  };
+
+  const handleStandUp = () => {
+    setIsSitting(false);
+    setSittingPosition(null);
+  };
+
+  const seatPositions = [
+    // Row 1
+    { position: [-3, 0, -5] as [number, number, number] },
+    { position: [0, 0, -5] as [number, number, number] },
+    { position: [3, 0, -5] as [number, number, number] },
+    // Row 2
+    { position: [-3, 0, -2] as [number, number, number] },
+    { position: [0, 0, -2] as [number, number, number] },
+    { position: [3, 0, -2] as [number, number, number] },
+    // Row 3
+    { position: [-3, 0, 1] as [number, number, number] },
+    { position: [0, 0, 1] as [number, number, number] },
+    { position: [3, 0, 1] as [number, number, number] },
+    // Row 4
+    { position: [-3, 0, 4] as [number, number, number] },
+    { position: [0, 0, 4] as [number, number, number] },
+    { position: [3, 0, 4] as [number, number, number] },
+  ];
+
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#000' }}>
-      <Canvas camera={{ position: [0, 5, 10], fov: 60 }}>
-        <ClassroomScene roomName={roomName} onExit={onExit} />
+      <Canvas camera={{ position: [0, 1.6, 8], fov: 75 }}>
+        <ClassroomScene 
+          roomName={roomName} 
+          nearSeatIndex={nearSeatIndex} 
+          isSitting={isSitting}
+        />
+        <ClassroomPlayer 
+          seats={seatPositions}
+          onSeatProximity={setNearSeatIndex}
+          isSitting={isSitting}
+          sittingPosition={sittingPosition}
+          onSitRequest={handleSitDown}
+          onStandRequest={handleStandUp}
+        />
       </Canvas>
       
       {/* Exit button overlay */}
@@ -56,12 +105,87 @@ export function Classroom({ roomName, onExit }: ClassroomProps) {
         <div style={{ marginBottom: '5px' }}>🏫 {roomName}</div>
         <div>📍 Interactive Classroom</div>
         <div>👥 12 Student Desks</div>
+        {isSitting && <div style={{ marginTop: '5px', color: '#00aa00' }}>✓ Seated</div>}
       </div>
+
+      {/* Controls hint */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '25px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(255, 255, 255, 0.9)',
+          padding: '12px 25px',
+          color: '#000000',
+          borderRadius: '10px',
+          border: '2px solid #00ffff',
+          zIndex: 40,
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          boxShadow: '0 0 20px rgba(0, 255, 255, 0.5)'
+        }}
+      >
+        {isSitting ? (
+          <div>Press E to stand up</div>
+        ) : (
+          <div>🖱️ Click & drag to look • 🎮 WASD to move • 💺 Get close to desk and press E to sit</div>
+        )}
+      </div>
+
+      {/* Seat prompt */}
+      {!isSitting && nearSeatIndex !== null && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(255, 255, 255, 0.95)',
+            color: '#000000',
+            padding: '20px 30px',
+            borderRadius: '15px',
+            border: '3px solid #00ffff',
+            zIndex: 50,
+            textAlign: 'center',
+            boxShadow: '0 0 30px rgba(0, 255, 255, 0.8)',
+          }}
+        >
+          <div style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '10px' }}>
+            💺 Desk Available
+          </div>
+          <button
+            onClick={handleSitDown}
+            style={{
+              padding: '12px 24px',
+              borderRadius: '10px',
+              border: 'none',
+              background: 'linear-gradient(45deg, #00ffff, #0088ff)',
+              color: '#000',
+              fontWeight: 700,
+              fontSize: '1.1rem',
+              cursor: 'pointer',
+              boxShadow: '0 0 15px rgba(0, 255, 255, 0.5)'
+            }}
+          >
+            Sit Down (E)
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function ClassroomScene({ roomName, onExit }: ClassroomProps) {
+function ClassroomScene({ 
+  roomName, 
+  nearSeatIndex,
+  isSitting 
+}: { 
+  roomName: string; 
+  nearSeatIndex: number | null;
+  isSitting: boolean;
+}) {
   return (
     <group>
       {/* Floor */}
@@ -143,24 +267,24 @@ function ClassroomScene({ roomName, onExit }: ClassroomProps) {
 
       {/* Desks in rows */}
       {/* Row 1 */}
-      <Desk position={[-3, 0, -5]} />
-      <Desk position={[0, 0, -5]} />
-      <Desk position={[3, 0, -5]} />
+      <Desk position={[-3, 0, -5]} isHighlighted={nearSeatIndex === 0} />
+      <Desk position={[0, 0, -5]} isHighlighted={nearSeatIndex === 1} />
+      <Desk position={[3, 0, -5]} isHighlighted={nearSeatIndex === 2} />
 
       {/* Row 2 */}
-      <Desk position={[-3, 0, -2]} />
+      <Desk position={[-3, 0, -2]} isHighlighted={nearSeatIndex === 3} />
       <Desk position={[0, 0, -2]} isOccupied />
-      <Desk position={[3, 0, -2]} />
+      <Desk position={[3, 0, -2]} isHighlighted={nearSeatIndex === 5} />
 
       {/* Row 3 */}
-      <Desk position={[-3, 0, 1]} />
-      <Desk position={[0, 0, 1]} />
+      <Desk position={[-3, 0, 1]} isHighlighted={nearSeatIndex === 6} />
+      <Desk position={[0, 0, 1]} isHighlighted={nearSeatIndex === 7} />
       <Desk position={[3, 0, 1]} isOccupied />
 
       {/* Row 4 */}
-      <Desk position={[-3, 0, 4]} />
-      <Desk position={[0, 0, 4]} />
-      <Desk position={[3, 0, 4]} />
+      <Desk position={[-3, 0, 4]} isHighlighted={nearSeatIndex === 9} />
+      <Desk position={[0, 0, 4]} isHighlighted={nearSeatIndex === 10} />
+      <Desk position={[3, 0, 4]} isHighlighted={nearSeatIndex === 11} />
 
       {/* Teacher's desk */}
       <group position={[0, 0, -8]}>
