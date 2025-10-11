@@ -41,58 +41,6 @@ const DOOR_WIDTH = 2.0;
 const DOOR_HEIGHT = 2.6;
 
 // -----------------------------
-// New DoorLabel component with manual billboarding
-// -----------------------------
-
-function DoorLabel({ position, label }: { position: [number, number, number]; label: string }) {
-  const groupRef = useRef<THREE.Group>(null);
-  const { camera } = useThree();
-
-  useFrame(() => {
-    if (groupRef.current) {
-      // Make the label face the camera while maintaining its upright position
-      groupRef.current.lookAt(
-        camera.position.x,
-        groupRef.current.position.y, // Keep the same Y to prevent tilting
-        camera.position.z
-      );
-    }
-  });
-
-  return (
-    <group ref={groupRef} position={position}>
-      <group>
-        <mesh position={[0, 0, -0.01]}>
-          <planeGeometry args={[2.2, 0.5]} />
-          <meshStandardMaterial 
-            color="#ffffff" 
-            transparent 
-            opacity={0.95}
-            metalness={0.1}
-            roughness={0.2}
-          />
-        </mesh>
-        <Text
-          fontSize={0.16}
-          anchorX="center"
-          anchorY="middle"
-          color="#000000"
-          fontWeight="bold"
-          rotation={[0, -Math.PI /3 , 0]}
-        >
-          {label}
-        </Text>
-        {/* Label frame */}
-        <mesh position={[0, 0, -0.02]}>
-          <planeGeometry args={[2.25, 0.55]} />
-          <meshStandardMaterial color="#2a2a2a" />
-        </mesh>
-      </group>
-    </group>
-  );
-}
-
-// -----------------------------
 // Enhanced Door component with FIXED label alignment
 // -----------------------------
 
@@ -189,8 +137,33 @@ function Door({
         />
       </mesh>
 
-      {/* FIXED Door label - Using manual billboarding */}
-      <DoorLabel position={[0, DOOR_HEIGHT + 0.8, 0]} label={info.label} />
+      {/* FIXED Door label - Fixed orientation matching door direction */}
+      <group position={[0, DOOR_HEIGHT + 0.8, 0]}>
+        <mesh position={[0, 0, 0.01]}>
+          <planeGeometry args={[2.2, 0.5]} />
+          <meshStandardMaterial 
+            color="#ffffff" 
+            transparent 
+            opacity={0.95}
+            metalness={0.1}
+            roughness={0.2}
+          />
+        </mesh>
+        <Text
+          fontSize={0.16}
+          anchorX="center"
+          anchorY="middle"
+          color="#000000"
+          fontWeight="bold"
+        >
+          {info.label}
+        </Text>
+        {/* Label frame */}
+        <mesh position={[0, 0, 0]}>
+          <planeGeometry args={[2.25, 0.55]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
+      </group>
 
       {/* Enhanced hover indicator */}
       {hovered && (
@@ -538,7 +511,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
 }
 
 // -----------------------------
-// FIXED TutorPlayer with proper camera-relative movement
+// FIXED TutorPlayer with proper camera-relative movement and pointer lock fixes
 // -----------------------------
 
 function TutorPlayer({
@@ -559,13 +532,13 @@ function TutorPlayer({
   const { camera } = useThree();
   
   const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
-  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const [isPointerLocked, setIsPointerLocked] = useState(false);
 
   const keyState = useRef({ forward: false, backward: false, left: false, right: false });
   
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!document.pointerLockElement) return;
+      if (!isPointerLocked) return;
       
       const movementX = e.movementX || 0;
       const movementY = e.movementY || 0;
@@ -591,11 +564,20 @@ function TutorPlayer({
 
     const handleMouseUp = () => {
       onMouseDownChange(false);
+      // Exit pointer lock when mouse is released
+      if (document.pointerLockElement) {
+        document.exitPointerLock();
+      }
     };
 
     const handlePointerLockChange = () => {
-      if (!document.pointerLockElement) {
-        onMouseDownChange(false);
+      const locked = !!document.pointerLockElement;
+      setIsPointerLocked(locked);
+      onMouseDownChange(locked);
+      
+      if (!locked) {
+        // Reset cursor style when pointer lock is lost
+        document.body.style.cursor = "grab";
       }
     };
 
@@ -610,7 +592,7 @@ function TutorPlayer({
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('pointerlockchange', handlePointerLockChange);
     };
-  }, [cameraRotation, onRotationChange, onMouseDownChange]);
+  }, [cameraRotation, onRotationChange, onMouseDownChange, isPointerLocked]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -762,9 +744,8 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
   const [isMouseDown, setIsMouseDown] = useState(false);
 
   const handleDoorClick = (index: number) => {
-    if (onEnterClassroom) onEnterClassroom(index);
-    else {
-      console.log("Enter classroom", index);
+    if (onEnterClassroom) {
+      onEnterClassroom(index);
     }
   };
 
@@ -776,7 +757,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       top: 0, 
       left: 0,
       background: "#000000",
-      cursor: isMouseDown ? "grabbing" : "grab"
+      cursor: isMouseDown ? "none" : "grab" // Hide cursor when mouse is down
     }}>
       <Canvas 
         shadows 
@@ -904,7 +885,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       >
         <div style={{ marginBottom: "5px" }}>🏫 ACADEMIC WING</div>
         <div>📍 10 Classrooms</div>
-        <div>🎯 L-Shaped Layout</div>
+        <div>🎯 -Shaped Layout</div>
         <div style={{ marginTop: "5px", color: "#ff0000", fontSize: "12px" }}>
           🔺 Look down to see position marker
         </div>
