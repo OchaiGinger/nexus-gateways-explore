@@ -35,10 +35,10 @@ const classroomsInput: DoorInfo[] = [
 const MAIN_AREA = { minX: -9.5, maxX: 9.5, minZ: -30, maxZ: 30, minY: 0, maxY: 10 };
 const BRANCH_AREA = { minX: 9.5, maxX: 30.5, minZ: -20, maxZ: 4, minY: 0, maxY: 10 };
 
-// door appearance
-const DOOR_THICKNESS = 0.15;
-const DOOR_WIDTH = 2.0;
-const DOOR_HEIGHT = 2.6;
+// door appearance - increased size for realism
+const DOOR_THICKNESS = 0.2;
+const DOOR_WIDTH = 3.0;
+const DOOR_HEIGHT = 3.5;
 
 // -----------------------------
 // Enhanced Door component with FIXED label alignment
@@ -137,8 +137,12 @@ function Door({
         />
       </mesh>
 
-      {/* FIXED Door label - Fixed orientation matching door direction */}
+      {/* FIXED Door label - rotates to face center of hallway */}
       <group position={[0, DOOR_HEIGHT + 0.8, 0]}>
+        <mesh position={[0, 0, 0]}>
+          <planeGeometry args={[2.25, 0.55]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
         <mesh position={[0, 0, 0.01]}>
           <planeGeometry args={[2.2, 0.5]} />
           <meshStandardMaterial 
@@ -150,6 +154,7 @@ function Door({
           />
         </mesh>
         <Text
+          position={[0, 0, 0.02]}
           fontSize={0.16}
           anchorX="center"
           anchorY="middle"
@@ -158,11 +163,6 @@ function Door({
         >
           {info.label}
         </Text>
-        {/* Label frame */}
-        <mesh position={[0, 0, 0]}>
-          <planeGeometry args={[2.25, 0.55]} />
-          <meshStandardMaterial color="#2a2a2a" />
-        </mesh>
       </group>
 
       {/* Enhanced hover indicator */}
@@ -519,23 +519,36 @@ function TutorPlayer({
   onPositionChange,
   onDoorProximity,
   onRotationChange,
+  onEnterKeyPressed,
   speed = 3,
 }: {
   doors: { position: [number, number, number] }[];
   onPositionChange: (p: THREE.Vector3) => void;
   onDoorProximity: (index: number | null) => void;
   onRotationChange: (rotation: number) => void;
+  onEnterKeyPressed: () => void;
   speed?: number;
 }) {
   const { camera } = useThree();
   
   const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
+  const [isMouseDown, setIsMouseDown] = useState(false);
 
   const keyState = useRef({ forward: false, backward: false, left: false, right: false });
   
   useEffect(() => {
+    const handleMouseDown = () => {
+      setIsMouseDown(true);
+    };
+
+    const handleMouseUp = () => {
+      setIsMouseDown(false);
+    };
+
     const handleMouseMove = (e: MouseEvent) => {
-      // Always handle mouse movement for orbit controls, no pointer lock needed
+      // Only handle mouse movement when mouse button is pressed
+      if (!isMouseDown) return;
+      
       const movementX = e.movementX || 0;
       const movementY = e.movementY || 0;
 
@@ -548,12 +561,16 @@ function TutorPlayer({
       onRotationChange(newRotation.y);
     };
 
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousemove', handleMouseMove);
 
     return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [cameraRotation, onRotationChange]);
+  }, [cameraRotation, onRotationChange, isMouseDown]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -561,6 +578,7 @@ function TutorPlayer({
       if (e.code === "KeyS" || e.code === "ArrowDown") keyState.current.backward = true;
       if (e.code === "KeyA" || e.code === "ArrowLeft") keyState.current.left = true;
       if (e.code === "KeyD" || e.code === "ArrowRight") keyState.current.right = true;
+      if (e.code === "KeyV") onEnterKeyPressed();
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "KeyW" || e.code === "ArrowUp") keyState.current.forward = false;
@@ -574,7 +592,7 @@ function TutorPlayer({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, []);
+  }, [onEnterKeyPressed]);
 
   const [hoveredDoorIndex, setHoveredDoorIndex] = useState<number | null>(null);
   const frontVector = new THREE.Vector3();
@@ -709,6 +727,12 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
     }
   };
 
+  const handleEnterKeyPressed = () => {
+    if (nearDoorIndex !== null) {
+      handleDoorClick(nearDoorIndex);
+    }
+  };
+
   return (
     <div style={{ 
       width: "100vw", 
@@ -740,6 +764,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           onPositionChange={(p) => setPlayerPos(p)}
           onDoorProximity={(idx) => setNearDoorIndex(idx)}
           onRotationChange={(rotation) => setPlayerRotation(rotation)}
+          onEnterKeyPressed={handleEnterKeyPressed}
           speed={3}
         />
       </Canvas>
@@ -819,7 +844,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           boxShadow: "0 0 20px rgba(0, 255, 255, 0.5)"
         }}
       >
-        <div>🖱️ Move mouse to look around • 🎮 WASD to move • 🚪 Look at doors to interact</div>
+        <div>🖱️ Click & drag to look around • 🎮 WASD to move • V to enter classroom</div>
         <div style={{ marginTop: "5px", fontSize: "12px" }}>
           🔴 Look down to see your position marker and feet
         </div>

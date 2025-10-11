@@ -101,17 +101,6 @@ function ClassroomScene({ roomName, onExit }: ClassroomProps) {
         <meshStandardMaterial color="#5a4a3a" />
       </mesh>
 
-      {/* Exit door trigger */}
-      <mesh 
-        position={[0, 2.5, 9.8]} 
-        onClick={onExit}
-        onPointerEnter={() => document.body.style.cursor = 'pointer'}
-        onPointerLeave={() => document.body.style.cursor = 'default'}
-      >
-        <boxGeometry args={[3, 5, 0.1]} />
-        <meshBasicMaterial color="#8B4513" transparent opacity={0.5} />
-      </mesh>
-
       {/* Ceiling */}
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 10, 0]}>
         <planeGeometry args={[20, 20]} />
