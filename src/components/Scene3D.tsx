@@ -44,7 +44,7 @@ function Ground() {
 function Lights({ portals }: { portals: { position: [number, number, number]; color?: string }[] }) {
   return (
     <>
-      <hemisphereLight skyColor="#cde7ff" groundColor="#0a0010" intensity={0.6} />
+      <hemisphereLight color="#cde7ff" groundColor="#0a0010" intensity={0.6} />
       <directionalLight
         position={[12, 25, 10]}
         intensity={1.0}
@@ -116,9 +116,6 @@ function Scene({
 }) {
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1, 0));
 
-  // ✅ Use local model instead of remote URL
-  const localModelUrl = "/models/character.glb";
-
   return (
     <>
       <fog attach="fog" args={["#000015", 10, 220]} />
@@ -127,7 +124,6 @@ function Scene({
       <Ground />
 
       <Player
-        modelUrl={localModelUrl}
         onPositionChange={setPlayerPosition}
         portals={portals}
         walls={wallCollisions}

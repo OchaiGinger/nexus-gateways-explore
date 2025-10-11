@@ -498,7 +498,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
       />
       
       <hemisphereLight 
-        skyColor="#a0a0ff" 
+        color="#a0a0ff" 
         groundColor="#404080" 
         intensity={1.0}
       />

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { useGLTF } from "@react-three/drei";
 
 interface Portal {
   position: [number, number, number];
@@ -32,10 +32,9 @@ export function Player({
 
   // ✅ Load the GLB character model from public/models
   useEffect(() => {
-    const loader = new GLTFLoader();
-    loader.load(
-      "/models/character.glb", // 👈 must start with a slash (served from public)
-      (gltf) => {
+    try {
+      const gltf = useGLTF("/models/character.glb");
+      if (gltf && gltf.scene) {
         gltf.scene.traverse((child: any) => {
           if (child.isMesh) {
             child.castShadow = true;
@@ -43,10 +42,10 @@ export function Player({
           }
         });
         setCharacterScene(gltf.scene);
-      },
-      undefined,
-      (err) => console.error("❌ Failed to load character.glb:", err)
-    );
+      }
+    } catch (err) {
+      console.error("❌ Failed to load character.glb:", err);
+    }
   }, []);
 
   // keyboard movement (manual event listeners)
