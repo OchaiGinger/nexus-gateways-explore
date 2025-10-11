@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
 import { Text } from '@react-three/drei';
-import { AuditoriumDesk } from './AuditoriumDesk';
+import { Desk } from './Desk';
 import ClassroomPlayer from './ClassroomPlayer';
 
 interface ClassroomProps {
@@ -14,8 +14,9 @@ export function Classroom({ roomName, onExit }: ClassroomProps) {
   const [nearSeatIndex, setNearSeatIndex] = useState<number | null>(null);
   const [isSitting, setIsSitting] = useState(false);
   const [sittingPosition, setSittingPosition] = useState<THREE.Vector3 | null>(null);
+  const [isMouseDown, setIsMouseDown] = useState(false); // Add this state
 
-  // Generate auditorium seats with random occupancy
+  // Generate classroom seats with random occupancy
   const seatPositions = useMemo(() => {
     const seats: { position: [number, number, number]; isOccupied: boolean }[] = [];
     const rows = 8;
@@ -63,13 +64,23 @@ export function Classroom({ roomName, onExit }: ClassroomProps) {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#000', cursor: isMouseDown ? 'grabbing' : 'grab' }}>
+    <div 
+      style={{ 
+        width: '100vw', 
+        height: '100vh', 
+        background: '#000', 
+        cursor: isMouseDown ? 'grabbing' : 'grab' 
+      }}
+      onMouseDown={() => setIsMouseDown(true)}
+      onMouseUp={() => setIsMouseDown(false)}
+      onMouseLeave={() => setIsMouseDown(false)} // Reset when mouse leaves
+    >
       <Canvas 
         shadows 
         camera={{ position: [0, 1.6, 8], fov: 75 }}
         gl={{ antialias: true }}
       >
-        <AuditoriumScene 
+        <ClassroomScene 
           roomName={roomName} 
           seatPositions={seatPositions}
           nearSeatIndex={nearSeatIndex} 
@@ -104,7 +115,7 @@ export function Classroom({ roomName, onExit }: ClassroomProps) {
           boxShadow: '0 4px 15px rgba(255, 68, 68, 0.4)'
         }}
       >
-        Exit Auditorium
+        Exit Classroom
       </button>
 
       {/* Classroom info */}
@@ -123,9 +134,9 @@ export function Classroom({ roomName, onExit }: ClassroomProps) {
         }}
       >
         <div style={{ marginBottom: '5px' }}>🏫 {roomName}</div>
-        <div>📍 Auditorium Style</div>
+        <div>📍 Classroom Style</div>
         <div>👥 {seatPositions.length} Seats</div>
-        {isSitting && <div style={{ marginTop: '5px', color: '#00aa00' }}>✓ Seated - Focus on Stage</div>}
+        {isSitting && <div style={{ marginTop: '5px', color: '#00aa00' }}>✓ Seated - Focus on Front</div>}
       </div>
 
       {/* Controls hint */}
@@ -148,9 +159,9 @@ export function Classroom({ roomName, onExit }: ClassroomProps) {
         }}
       >
         {isSitting ? (
-          <div>Press E to stand up • Focus on the stage</div>
+          <div>Press E to stand up • Focus on the front</div>
         ) : (
-          <div>🖱️ Click & drag to look • 🎮 WASD to move • 💺 Get close to empty seat and press E to sit</div>
+          <div>🖱️ Click & drag to look • 🎮 WASD to move • 💺 Get close to empty desk and press E to sit</div>
         )}
       </div>
 
@@ -173,10 +184,10 @@ export function Classroom({ roomName, onExit }: ClassroomProps) {
           }}
         >
           <div style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '10px' }}>
-            💺 Seat Available
+            💺 Desk Available
           </div>
           <div style={{ marginBottom: '15px', fontSize: '1rem' }}>
-            Press E to sit down and focus on the stage
+            Press E to sit down and focus on the front
           </div>
           <button
             onClick={handleSitDown}
@@ -200,7 +211,7 @@ export function Classroom({ roomName, onExit }: ClassroomProps) {
   );
 }
 
-function AuditoriumScene({ 
+function ClassroomScene({ 
   roomName, 
   seatPositions,
   nearSeatIndex,
@@ -213,7 +224,7 @@ function AuditoriumScene({
 }) {
   return (
     <group>
-      {/* Enhanced Floor with curved pattern */}
+      {/* Enhanced Floor with pattern */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
         <planeGeometry args={[30, 30]} />
         <meshStandardMaterial 
@@ -223,7 +234,7 @@ function AuditoriumScene({
         />
       </mesh>
 
-      {/* Curved floor steps */}
+      {/* Floor steps */}
       {Array.from({ length: 8 }, (_, i) => (
         <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[0, -i * 0.4 - 2.2, 6 - i * 2.5]} receiveShadow>
           <ringGeometry args={[12, 15, 32, 1, 0, Math.PI]} />
@@ -231,7 +242,7 @@ function AuditoriumScene({
         </mesh>
       ))}
 
-      {/* Enhanced Walls - Curved back wall */}
+      {/* Enhanced Walls */}
       <mesh position={[0, 5, 12]} receiveShadow castShadow>
         <cylinderGeometry args={[16, 16, 10, 32, 1, true, 0, Math.PI]} />
         <meshStandardMaterial color="#2a2a4a" roughness={0.7} />
@@ -247,62 +258,50 @@ function AuditoriumScene({
         <meshStandardMaterial color="#2a2a4a" roughness={0.7} />
       </mesh>
 
-      {/* Front wall with stage */}
+      {/* Front wall with whiteboard */}
       <mesh position={[0, 5, -16]} receiveShadow castShadow>
         <boxGeometry args={[30, 10, 0.3]} />
         <meshStandardMaterial color="#2a2a4a" roughness={0.7} />
       </mesh>
 
-      {/* Grand Stage */}
+      {/* Teacher's area */}
       <group position={[0, -0.5, -14]}>
-        {/* Stage platform */}
+        {/* Teacher's desk */}
         <mesh position={[0, 0.5, 0]} receiveShadow castShadow>
-          <boxGeometry args={[12, 1, 4]} />
+          <boxGeometry args={[4, 1, 2]} />
           <meshStandardMaterial color="#5a4a3a" roughness={0.6} />
         </mesh>
         
-        {/* Stage front */}
-        <mesh position={[0, 0, 2]} receiveShadow castShadow>
-          <boxGeometry args={[12.2, 0.2, 0.5]} />
+        {/* Desk front */}
+        <mesh position={[0, 0, 1]} receiveShadow castShadow>
+          <boxGeometry args={[4.2, 0.2, 0.5]} />
           <meshStandardMaterial color="#8B4513" roughness={0.5} />
         </mesh>
 
-        {/* Stage steps */}
-        {[2.5, 3.5].map((z, i) => (
-          <mesh key={i} position={[0, -0.2 * (i + 1), z]} receiveShadow castShadow>
-            <boxGeometry args={[13 + i, 0.2, 1]} />
-            <meshStandardMaterial color="#6a5a4a" roughness={0.7} />
-          </mesh>
-        ))}
-
-        {/* Podium */}
-        <mesh position={[0, 1.2, -1]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.8, 1, 1.2, 16]} />
-          <meshStandardMaterial color="#8B4513" roughness={0.6} />
-        </mesh>
-        <mesh position={[0, 1.8, -1]} castShadow receiveShadow>
-          <boxGeometry args={[1, 0.1, 1]} />
-          <meshStandardMaterial color="#5a3a2a" roughness={0.5} />
-        </mesh>
-
-        {/* Presentation screen */}
-        <mesh position={[0, 4, -1.5]} castShadow receiveShadow>
+        {/* Whiteboard */}
+        <mesh position={[0, 3, -1.5]} castShadow receiveShadow>
           <boxGeometry args={[8, 4, 0.1]} />
-          <meshStandardMaterial color="#000011" emissive="#001133" emissiveIntensity={0.3} />
+          <meshStandardMaterial color="#ffffff" />
         </mesh>
-        <mesh position={[0, 4, -1.45]} castShadow>
+        <mesh position={[0, 3, -1.45]} castShadow>
           <boxGeometry args={[8.2, 4.2, 0.1]} />
           <meshStandardMaterial color="#2a2a2a" />
         </mesh>
+
+        {/* Whiteboard frame */}
+        <mesh position={[0, 3, -1.4]} castShadow>
+          <boxGeometry args={[8.4, 4.4, 0.1]} />
+          <meshStandardMaterial color="#8B4513" />
+        </mesh>
       </group>
 
-      {/* Enhanced Ceiling - Domed */}
+      {/* Ceiling */}
       <mesh position={[0, 12, 0]} receiveShadow castShadow>
         <sphereGeometry args={[18, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <meshStandardMaterial color="#4a4a6a" roughness={0.9} metalness={0.1} />
       </mesh>
 
-      {/* Room title above stage */}
+      {/* Room title */}
       <Text
         position={[0, 8, -15.7]}
         fontSize={0.8}
@@ -311,7 +310,7 @@ function AuditoriumScene({
         anchorY="middle"
         fontWeight="bold"
       >
-        {roomName} AUDITORIUM
+        {roomName} CLASSROOM
       </Text>
 
       {/* Exit signs */}
@@ -366,7 +365,7 @@ function AuditoriumScene({
         </Text>
       </group>
 
-      {/* Auditorium seats */}
+      {/* Classroom desks */}
       {seatPositions.map((seat, index) => (
         <Desk
           key={index}
@@ -376,7 +375,7 @@ function AuditoriumScene({
         />
       ))}
 
-      {/* Enhanced ceiling lights - theater style */}
+      {/* Ceiling lights */}
       {Array.from({ length: 5 }, (_, i) => 
         Array.from({ length: 3 }, (_, j) => (
           <group key={`${i}-${j}`} position={[-8 + i * 4, 10, -8 + j * 4]}>
@@ -403,7 +402,7 @@ function AuditoriumScene({
         ))
       )}
 
-      {/* Stage lighting */}
+      {/* Front lighting */}
       <group position={[0, 8, -10]}>
         <spotLight
           intensity={5}
@@ -421,7 +420,7 @@ function AuditoriumScene({
         </mesh>
       </group>
 
-      {/* Side stage lights */}
+      {/* Side lights */}
       {[-5, 5].map((x) => (
         <group key={x} position={[x, 6, -12]}>
           <spotLight
