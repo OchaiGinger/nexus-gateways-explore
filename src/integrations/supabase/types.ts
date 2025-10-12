@@ -14,13 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      chat_messages: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          room_id: string | null
+          room_type: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          room_id?: string | null
+          room_type: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          room_id?: string | null
+          room_type?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      user_presence: {
+        Row: {
+          id: string
+          is_sitting: boolean | null
+          position_x: number
+          position_y: number
+          position_z: number
+          room_id: string | null
+          room_type: string
+          rotation_y: number
+          seat_index: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_sitting?: boolean | null
+          position_x?: number
+          position_y?: number
+          position_z?: number
+          room_id?: string | null
+          room_type: string
+          rotation_y?: number
+          seat_index?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_sitting?: boolean | null
+          position_x?: number
+          position_y?: number
+          position_z?: number
+          room_id?: string | null
+          room_type?: string
+          rotation_y?: number
+          seat_index?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_stale_presence: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
