@@ -10,6 +10,8 @@ function ClassroomPlayer({
   sittingPosition,
   onSitRequest,
   onStandRequest,
+  onPositionChange,
+  onRotationChange,
 }: {
   seats: { position: [number, number, number] }[];
   onSeatProximity: (index: number | null) => void;
@@ -17,14 +19,16 @@ function ClassroomPlayer({
   sittingPosition: THREE.Vector3 | null;
   onSitRequest: () => void;
   onStandRequest: () => void;
+  onPositionChange?: (position: THREE.Vector3) => void;
+  onRotationChange?: (rotation: number) => void;
 }) {
   const { camera } = useThree();
   const groupRef = useRef<THREE.Group>(null);
   const characterRef = useRef<THREE.Group>(null);
   
-  const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
+  const [cameraRotation, setCameraRotation] = useState({ y: Math.PI, x: 0 });
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 0, 5));
-  const [playerRotation, setPlayerRotation] = useState(0);
+  const [playerRotation, setPlayerRotation] = useState(Math.PI);
 
   const keyState = useRef({ 
     forward: false, 
@@ -103,10 +107,10 @@ function ClassroomPlayer({
   const direction = new THREE.Vector3();
   const tmpVec = new THREE.Vector3();
 
-  // Classroom boundaries
+  // Classroom boundaries - prevent reaching front
   const CLASSROOM_BOUNDS = {
     minX: -8, maxX: 8,
-    minZ: -9, maxZ: 8, // Prevent going to front stage
+    minZ: -9, maxZ: 2, // Prevent going to front (whiteboard area)
     minY: 0, maxY: 10
   };
 
@@ -168,33 +172,51 @@ function ClassroomPlayer({
         }
       }
 
-      // Update camera position (FPS view - behind character)
-      const cameraOffset = new THREE.Vector3(0, 1.6, 0.3);
-      cameraOffset.applyEuler(new THREE.Euler(0, cameraRotation.y, 0));
+      // TPS camera - position behind and above character
+      const cameraDistance = 3;
+      const cameraHeight = 1.5;
+      const cameraOffset = new THREE.Vector3(
+        Math.sin(cameraRotation.y) * cameraDistance,
+        cameraHeight,
+        Math.cos(cameraRotation.y) * cameraDistance
+      );
       camera.position.copy(playerPosition).add(cameraOffset);
+      
+      // Look at character
+      const lookAtPos = playerPosition.clone();
+      lookAtPos.y += 1;
+      camera.lookAt(lookAtPos);
 
       // Update character position and rotation
       if (characterRef.current) {
         characterRef.current.position.copy(playerPosition);
         characterRef.current.rotation.y = playerRotation;
       }
-
-      // Check seat proximity
-      let closestIndex: number | null = null;
-      let closestDist = Infinity;
-
-      seats.forEach((seat, i) => {
-        tmpVec.set(seat.position[0], seat.position[1], seat.position[2]);
-        const dist = tmpVec.distanceTo(playerPosition);
-        if (dist <= SEAT_DISTANCE_THRESHOLD && dist < closestDist) {
-          closestDist = dist;
-          closestIndex = i;
-        }
-      });
-
-      setNearSeatIndex(closestIndex);
-      onSeatProximity(closestIndex);
     }
+
+    // Notify parent components of position and rotation changes
+    if (onPositionChange) {
+      onPositionChange(playerPosition);
+    }
+    if (onRotationChange) {
+      onRotationChange(playerRotation);
+    }
+
+    // Check seat proximity
+    let closestIndex: number | null = null;
+    let closestDist = Infinity;
+
+    seats.forEach((seat, i) => {
+      tmpVec.set(seat.position[0], seat.position[1], seat.position[2]);
+      const dist = tmpVec.distanceTo(playerPosition);
+      if (dist <= SEAT_DISTANCE_THRESHOLD && dist < closestDist) {
+        closestDist = dist;
+        closestIndex = i;
+      }
+    });
+
+    setNearSeatIndex(closestIndex);
+    onSeatProximity(closestIndex);
 
     // Update animations
     if (actions) {

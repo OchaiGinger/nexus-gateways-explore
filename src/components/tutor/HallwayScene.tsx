@@ -1,7 +1,10 @@
 import React, { useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Text, Stars } from "@react-three/drei";
+import { Text, Stars, useGLTF } from "@react-three/drei";
+import { Chat } from "./Chat";
+import { useMultiplayer } from "@/hooks/useMultiplayer";
+import { OtherPlayer } from "./OtherPlayer";
 
 /**
  * Fixed HallwayScene with no cursor and proper orbit controls
@@ -247,34 +250,27 @@ function PlayerDirectionMarker({ position, rotation }: { position: THREE.Vector3
 }
 
 // -----------------------------
-// FPS Player Body
+// TPS Player Body (Character Model)
 // -----------------------------
 
-function FPSPlayerBody({ position, rotation }: { position: THREE.Vector3; rotation: number }) {
+function TPSPlayerBody({ position, rotation }: { position: THREE.Vector3; rotation: number }) {
+  const characterRef = useRef<THREE.Group>(null);
+  const { scene } = useGLTF('/models/character.glb');
+
+  const characterModel = React.useMemo(() => {
+    const model = scene.clone();
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    return model;
+  }, [scene]);
+
   return (
-    <group position={[position.x, 0, position.z]} rotation={[0, rotation, 0]}>
-      {/* Player body/feet - visible in FPS when looking down */}
-      <group position={[0, 0.8, 0]}>
-        {/* Shoes/feet */}
-        <mesh position={[0.1, -0.7, 0.1]} castShadow>
-          <boxGeometry args={[0.2, 0.1, 0.3]} />
-          <meshStandardMaterial color="#333333" />
-        </mesh>
-        <mesh position={[-0.1, -0.7, 0.1]} castShadow>
-          <boxGeometry args={[0.2, 0.1, 0.3]} />
-          <meshStandardMaterial color="#333333" />
-        </mesh>
-        
-        {/* Lower legs */}
-        <mesh position={[0.1, -0.5, 0]} castShadow>
-          <cylinderGeometry args={[0.05, 0.05, 0.4, 8]} />
-          <meshStandardMaterial color="#2a2a2a" />
-        </mesh>
-        <mesh position={[-0.1, -0.5, 0]} castShadow>
-          <cylinderGeometry args={[0.05, 0.05, 0.4, 8]} />
-          <meshStandardMaterial color="#2a2a2a" />
-        </mesh>
-      </group>
+    <group ref={characterRef} position={[position.x, 0, position.z]} rotation={[0, rotation, 0]}>
+      <primitive object={characterModel} scale={0.8} rotation={[0, Math.PI, 0]} />
     </group>
   );
 }
@@ -283,12 +279,13 @@ function FPSPlayerBody({ position, rotation }: { position: THREE.Vector3; rotati
 // Updated Hallway with COMPLETE walls and SEPARATION WALL
 // -----------------------------
 
-function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, playerRotation }: { 
+function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, playerRotation, otherPlayers }: { 
   onDoorClick: (i: number) => void; 
   doorWorldInfos: (DoorInfo & { worldPosition: [number, number, number]; rotationY: number })[]; 
   nearDoorIndex: number | null;
   playerPos: THREE.Vector3;
   playerRotation: number;
+  otherPlayers: Map<string, any>;
 }) {
   return (
     <group>
@@ -477,8 +474,17 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
       {/* Enhanced Player Direction Marker */}
       <PlayerDirectionMarker position={playerPos} rotation={playerRotation} />
       
-      {/* FPS Player Body */}
-      <FPSPlayerBody position={playerPos} rotation={playerRotation} />
+      {/* TPS Player Body */}
+      <TPSPlayerBody position={playerPos} rotation={playerRotation} />
+      
+      {/* Render other players */}
+      {Array.from(otherPlayers.values()).map((otherPlayer) => (
+        <OtherPlayer
+          key={otherPlayer.userId}
+          position={otherPlayer.position}
+          rotationY={otherPlayer.rotationY}
+        />
+      ))}
 
       {/* ENHANCED lighting setup with increased intensity */}
       <ambientLight intensity={1.2} color="#ffffff" />
@@ -531,8 +537,9 @@ function TutorPlayer({
 }) {
   const { camera } = useThree();
   
-  const [cameraRotation, setCameraRotation] = useState({ y: 0, x: 0 });
+  const [cameraRotation, setCameraRotation] = useState({ y: Math.PI, x: 0 });
   const [isMouseDown, setIsMouseDown] = useState(false);
+  const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 1.6, 20));
 
   const keyState = useRef({ forward: false, backward: false, left: false, right: false });
   
@@ -655,10 +662,27 @@ function TutorPlayer({
 
       if (!inMain && !inBranch) {
         camera.position.copy(prevPos);
+      } else {
+        setPlayerPosition(camera.position.clone());
       }
     }
 
-    onPositionChange(camera.position.clone());
+    // TPS camera - position behind and above character
+    const cameraDistance = 4;
+    const cameraHeight = 2;
+    const cameraOffset = new THREE.Vector3(
+      Math.sin(cameraRotation.y) * cameraDistance,
+      cameraHeight,
+      Math.cos(cameraRotation.y) * cameraDistance
+    );
+    camera.position.copy(playerPosition).add(cameraOffset);
+    
+    // Look at character
+    const lookAtPos = playerPosition.clone();
+    lookAtPos.y += 1;
+    camera.lookAt(lookAtPos);
+
+    onPositionChange(playerPosition);
     state.camera.getWorldDirection(cameraDir);
 
     let closestIndex: number | null = null;
@@ -692,6 +716,18 @@ function TutorPlayer({
 // -----------------------------
 
 export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (index: number) => void }) {
+  const [username] = useState(`Student_${Math.random().toString(36).substr(2, 5)}`);
+  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1.6, 20));
+  const [playerRotation, setPlayerRotation] = useState(Math.PI);
+  
+  // Multiplayer integration
+  const { otherPlayers } = useMultiplayer({
+    roomType: 'hallway',
+    roomId: '',
+    localPosition: playerPos,
+    localRotation: playerRotation,
+  });
+  
   // Compute door positions - all doors properly face the hallway
   const doorWorldInfos = classroomsInput.map((c) => {
     const [xRaw, yRaw, zRaw] = c.originalPosition;
@@ -718,8 +754,6 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
 
   const doorPositionsForPlayer = doorWorldInfos.map((d) => ({ position: d.worldPosition }));
   const [nearDoorIndex, setNearDoorIndex] = useState<number | null>(null);
-  const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1.6, 20));
-  const [playerRotation, setPlayerRotation] = useState(0);
 
   const handleDoorClick = (index: number) => {
     if (onEnterClassroom) {
@@ -757,6 +791,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
           nearDoorIndex={nearDoorIndex}
           playerPos={playerPos}
           playerRotation={playerRotation}
+          otherPlayers={otherPlayers}
         />
 
         <TutorPlayer
@@ -825,6 +860,13 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
         </div>
       )}
 
+      {/* Chat component */}
+      <Chat
+        roomType="hallway"
+        roomId=""
+        username={username}
+      />
+      
       {/* Controls hint */}
       <div
         style={{
@@ -846,7 +888,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
       >
         <div>🖱️ Click & drag to look around • 🎮 WASD to move • V to enter classroom</div>
         <div style={{ marginTop: "5px", fontSize: "12px" }}>
-          🔴 Look down to see your position marker and feet
+          👥 See other players in real-time • 💬 Click chat button to message
         </div>
       </div>
 
