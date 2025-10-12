@@ -457,8 +457,7 @@ function ClassroomScene({
       />
       
       <hemisphereLight 
-        skyColor="#a0a0ff" 
-        groundColor="#404080" 
+        color="#a0a0ff" 
         intensity={0.4}
       />
 
