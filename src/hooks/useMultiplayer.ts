@@ -8,7 +8,14 @@ export interface OtherPlayer {
   rotationY: number;
   isSitting: boolean;
   seatIndex: number | null;
+  color: string;
 }
+
+const PLAYER_COLORS = [
+  '#ff4d4d', '#4d94ff', '#4dff4d', '#ffff4d', 
+  '#ff4dff', '#4dffff', '#ff944d', '#944dff',
+  '#4dff94', '#ff4d94'
+];
 
 interface UseMultiplayerProps {
   roomType: 'hallway' | 'classroom';
@@ -31,6 +38,8 @@ export const useMultiplayer = ({
   const userId = useRef(`user_${Math.random().toString(36).substr(2, 9)}`);
   const updateInterval = useRef<NodeJS.Timeout>();
   const channelRef = useRef<ReturnType<typeof supabase.channel>>();
+  const playerColorMap = useRef<Map<string, string>>(new Map());
+  const colorIndex = useRef(0);
 
   useEffect(() => {
     const channel = supabase.channel(`room_${roomType}_${roomId}`);
@@ -45,6 +54,12 @@ export const useMultiplayer = ({
         Object.entries(state).forEach(([key, presences]: [string, any[]]) => {
           const presence = presences[0];
           if (key !== userId.current && presence) {
+            // Assign color if new player
+            if (!playerColorMap.current.has(key)) {
+              playerColorMap.current.set(key, PLAYER_COLORS[colorIndex.current % PLAYER_COLORS.length]);
+              colorIndex.current++;
+            }
+            
             newPlayers.set(key, {
               userId: key,
               position: new THREE.Vector3(
@@ -55,6 +70,7 @@ export const useMultiplayer = ({
               rotationY: presence.rotation_y,
               isSitting: presence.is_sitting || false,
               seatIndex: presence.seat_index,
+              color: playerColorMap.current.get(key) || '#00ffff',
             });
           }
         });

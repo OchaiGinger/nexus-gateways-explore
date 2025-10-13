@@ -2,9 +2,10 @@ import React, { useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Text, Stars, useGLTF } from "@react-three/drei";
-import { Chat } from "./Chat";
 import { useMultiplayer } from "@/hooks/useMultiplayer";
 import { OtherPlayer } from "./OtherPlayer";
+import { useProximityChat } from "@/hooks/useProximityChat";
+import { ProximityChat } from "./ProximityChat";
 
 /**
  * Fixed HallwayScene with no cursor and proper orbit controls
@@ -483,6 +484,7 @@ function Hallway({ onDoorClick, doorWorldInfos, nearDoorIndex, playerPos, player
           key={otherPlayer.userId}
           position={otherPlayer.position}
           rotationY={otherPlayer.rotationY}
+          color={otherPlayer.color}
         />
       ))}
 
@@ -716,7 +718,6 @@ function TutorPlayer({
 // -----------------------------
 
 export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (index: number) => void }) {
-  const [username] = useState(`Student_${Math.random().toString(36).substr(2, 5)}`);
   const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1.6, 20));
   const [playerRotation, setPlayerRotation] = useState(Math.PI);
   
@@ -727,6 +728,15 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
     localPosition: playerPos,
     localRotation: playerRotation,
   });
+
+  const {
+    nearbyPlayer,
+    chatOpen,
+    messages,
+    openChat,
+    closeChat,
+    sendMessage,
+  } = useProximityChat(playerPos, otherPlayers);
   
   // Compute door positions - all doors properly face the hallway
   const doorWorldInfos = classroomsInput.map((c) => {
@@ -860,11 +870,14 @@ export function HallwaySceneFPS({ onEnterClassroom }: { onEnterClassroom?: (inde
         </div>
       )}
 
-      {/* Chat component */}
-      <Chat
-        roomType="hallway"
-        roomId=""
-        username={username}
+      {/* ProximityChat component */}
+      <ProximityChat
+        nearbyPlayerId={nearbyPlayer?.id || null}
+        chatOpen={chatOpen}
+        messages={messages}
+        onOpenChat={openChat}
+        onCloseChat={closeChat}
+        onSendMessage={sendMessage}
       />
       
       {/* Controls hint */}

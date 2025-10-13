@@ -6,9 +6,10 @@ import { Desk } from "./Desk";
 import { Door } from "./Door";
 import { Button } from "@/components/ui/button";
 import ClassroomPlayer from "./ClassroomPlayer";
-import { Chat } from "./Chat";
 import { useMultiplayer } from "@/hooks/useMultiplayer";
 import { OtherPlayer } from "./OtherPlayer";
+import { useProximityChat } from "@/hooks/useProximityChat";
+import { ProximityChat } from "./ProximityChat";
 
 export function Classroom({ roomName, onExit }: { roomName: string; onExit: () => void }) {
   const [nearSeatIndex, setNearSeatIndex] = useState<number | null>(null);
@@ -16,7 +17,6 @@ export function Classroom({ roomName, onExit }: { roomName: string; onExit: () =
   const [sittingPosition, setSittingPosition] = useState<THREE.Vector3 | null>(null);
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 0, 5));
   const [playerRotation, setPlayerRotation] = useState(Math.PI);
-  const [username] = useState(`Student_${Math.random().toString(36).substr(2, 5)}`);
 
   // Multiplayer integration
   const { otherPlayers } = useMultiplayer({
@@ -27,6 +27,15 @@ export function Classroom({ roomName, onExit }: { roomName: string; onExit: () =
     isSitting,
     seatIndex: nearSeatIndex,
   });
+
+  const {
+    nearbyPlayer,
+    chatOpen,
+    messages,
+    openChat,
+    closeChat,
+    sendMessage,
+  } = useProximityChat(playerPosition, otherPlayers);
 
   // Dynamic desk generation - always have 2 base desks + 1 extra
   const [seatPositions, setSeatPositions] = useState<{ position: [number, number, number] }[]>([
@@ -101,6 +110,7 @@ export function Classroom({ roomName, onExit }: { roomName: string; onExit: () =
             key={otherPlayer.userId}
             position={otherPlayer.position}
             rotationY={otherPlayer.rotationY}
+            color={otherPlayer.color}
           />
         ))}
 
@@ -119,7 +129,14 @@ export function Classroom({ roomName, onExit }: { roomName: string; onExit: () =
         Exit Classroom
       </Button>
       
-      <Chat roomType="classroom" roomId={roomName} username={username} />
+      <ProximityChat
+        nearbyPlayerId={nearbyPlayer?.id || null}
+        chatOpen={chatOpen}
+        messages={messages}
+        onOpenChat={openChat}
+        onCloseChat={closeChat}
+        onSendMessage={sendMessage}
+      />
 
       {nearSeatIndex !== null && !isSitting && (
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white/90 px-6 py-3 rounded-lg">

@@ -5,9 +5,10 @@ import * as THREE from 'three';
 interface OtherPlayerProps {
   position: THREE.Vector3;
   rotationY: number;
+  color?: string;
 }
 
-export const OtherPlayer = ({ position, rotationY }: OtherPlayerProps) => {
+export const OtherPlayer = ({ position, rotationY, color = '#00ffff' }: OtherPlayerProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF('/models/character.glb');
 
@@ -17,10 +18,16 @@ export const OtherPlayer = ({ position, rotationY }: OtherPlayerProps) => {
       if (child instanceof THREE.Mesh) {
         child.castShadow = true;
         child.receiveShadow = true;
+        // Apply color tint
+        if (child.material) {
+          const mat = (child.material as THREE.MeshStandardMaterial).clone();
+          mat.color = new THREE.Color(color);
+          child.material = mat;
+        }
       }
     });
     return model;
-  }, [scene]);
+  }, [scene, color]);
 
   return (
     <group ref={groupRef} position={position} rotation={[0, rotationY, 0]}>
