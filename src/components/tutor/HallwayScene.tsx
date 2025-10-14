@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef } from "react";
+// src/components/HallwayScene.tsx
+import React, { useEffect, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Stars, Environment, Text } from "@react-three/drei";
+import { Stars, Environment, useGLTF } from "@react-three/drei";
 import { KeyboardControls } from "@react-three/drei";
 import { useNavigate } from "react-router-dom";
 import * as THREE from "three";
 import { Door } from "./Door";
-import { useMultiplayer } from "@/hooks/useMultiplayer";
-import { OtherPlayer } from "./OtherPlayer";
+import OtherPlayer from "./OtherPlayer"; // keep your OtherPlayer but we also render fallback
 import { ProximityChat } from "./ProximityChat";
-import { useProximityChat } from "@/hooks/useProximityChat";
-import { useGLTF } from "@react-three/drei";
+import { useProximityChat as useProximityChatLocal } from "@/hooks/useProximityChat"; // if you have, else we use local proximity logic
+import { useWebsocketMultiplayer } from "@/hooks/useWebsocketMultiplayer"; // new hook (see above)
 
 const keyboardMap = [
   { name: "forward", keys: ["ArrowUp", "KeyW"] },
@@ -27,31 +27,40 @@ const classrooms = [
   { label: "Literature", position: [6, 0, 5] as [number, number, number] },
 ];
 
-function HallwayPlayer({
+function FallbackAvatar({ color = "#00ffcc", position }: { color?: string; position: [number,number,number] }) {
+  return (
+    <group position={position}>
+      <mesh position={[0, 1, 0]}>
+        <cylinderGeometry args={[0.4, 0.4, 1.6, 12]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      <mesh position={[0, 2.25, 0]}>
+        <sphereGeometry args={[0.45, 12, 12]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+    </group>
+  );
+}
+
+function LocalPlayer({
   onPositionChange,
   doors,
   onDoorProximity,
+  cameraRef,
 }: {
   onPositionChange: (pos: THREE.Vector3) => void;
   doors: Array<{ position: [number, number, number] }>;
   onDoorProximity: (doorIndex: number | null) => void;
+  cameraRef: React.MutableRefObject<THREE.PerspectiveCamera | null>;
 }) {
-  const groupRef = useRef<THREE.Group>(null);
+  const groupRef = useRef<THREE.Group | null>(null);
   const velocity = useRef(new THREE.Vector3());
   const keys = useRef<Record<string, boolean>>({});
   const nearDoor = useRef<number | null>(null);
 
-  const { scene } = useGLTF("/models/character.glb");
-  const model = scene.clone();
-
-  useEffect(() => {
-    model.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-  }, [model]);
+  const gltf = useGLTF("/models/character.glb", true);
+  // if the model origin causes float, apply a small vertical offset
+  const modelYOffset = -0.9; // tweak this if needed
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => (keys.current[e.code] = true);
@@ -99,28 +108,31 @@ function HallwayPlayer({
     groupRef.current.position.x += velocity.current.x * delta;
     groupRef.current.position.z += velocity.current.z * delta;
 
-    // simple bounds
+    // clamp Y to ground height (prevents floating)
+    groupRef.current.position.y = 1; // fixed player height
+
+    // bounds
     groupRef.current.position.x = Math.max(-8, Math.min(8, groupRef.current.position.x));
     groupRef.current.position.z = Math.max(-25, Math.min(25, groupRef.current.position.z));
 
     // rotate toward movement
     if (velocity.current.lengthSq() > 0.0001) {
       const yaw = Math.atan2(velocity.current.x, velocity.current.z);
-      groupRef.current.rotation.y = THREE.MathUtils.damp(
-        groupRef.current.rotation.y,
-        yaw,
-        6,
-        delta
-      );
+      groupRef.current.rotation.y = THREE.MathUtils.damp(groupRef.current.rotation.y, yaw, 6, delta);
     }
 
-    // camera follow
+    // camera follow (slightly behind)
+    const camYaw = Math.atan2(forwardVec.x, forwardVec.z);
     const camOffset = new THREE.Vector3(0, 3, 6);
+    // rotate offset by camera yaw so camera stays behind camera direction
+    camOffset.applyAxisAngle(new THREE.Vector3(0,1,0), camYaw);
     const camTarget = groupRef.current.position.clone().add(camOffset);
-    state.camera.position.lerp(camTarget, 0.05);
-    state.camera.lookAt(groupRef.current.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+    if (cameraRef.current) {
+      cameraRef.current.position.lerp(camTarget, 0.08);
+      cameraRef.current.lookAt(groupRef.current.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+    }
 
-    // check door proximity
+    // door proximity
     let closestDoor: number | null = null;
     let minDist = Infinity;
     doors.forEach((door, i) => {
@@ -143,202 +155,154 @@ function HallwayPlayer({
 
   return (
     <group ref={groupRef} position={[0, 1, 20]}>
-      <primitive object={model} scale={1.2} />
+      {gltf?.scene ? (
+        // apply a slight negative Y offset to counter model origin
+        <primitive object={gltf.scene} position={[0, modelYOffset, 0]} scale={[1.2,1.2,1.2]} />
+      ) : (
+        <mesh position={[0, 1, 20]}>
+          <boxGeometry args={[1, 2, 1]} />
+          <meshStandardMaterial color="#00ffff" />
+        </mesh>
+      )}
     </group>
   );
 }
 
-function Hallway({
-  onDoorProximity,
-  onEnterDoor,
-  otherPlayers,
-  playerPosition,
-}: {
-  onDoorProximity: (doorIndex: number | null) => void;
-  onEnterDoor: (doorIndex: number) => void;
-  otherPlayers: Map<string, any>;
-  playerPosition: THREE.Vector3;
-}) {
-  const [nearDoor, setNearDoor] = useState<number | null>(null);
-
-  const handleDoorProximity = (index: number | null) => {
-    setNearDoor(index);
-    onDoorProximity(index);
-  };
-
-  useEffect(() => {
-    const handleE = (e: KeyboardEvent) => {
-      if (e.code === "KeyE" && nearDoor !== null) onEnterDoor(nearDoor);
-    };
-    window.addEventListener("keydown", handleE);
-    return () => window.removeEventListener("keydown", handleE);
-  }, [nearDoor, onEnterDoor]);
-
-  return (
-    <>
-      <fog attach="fog" args={["#000015", 10, 60]} />
-      <hemisphereLight color="#cde7ff" groundColor="#0a0010" intensity={0.6} />
-      <directionalLight position={[12, 25, 10]} intensity={1.0} castShadow />
-
-      <Stars radius={50} depth={40} count={4000} factor={3.5} />
-      <Environment preset="night" />
-
-      <HallwayPlayer
-        onPositionChange={() => {}}
-        doors={classrooms}
-        onDoorProximity={handleDoorProximity}
-      />
-
-      {/* Floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[20, 60]} />
-        <meshStandardMaterial color="#2a2a5a" metalness={0.1} roughness={0.7} />
-      </mesh>
-
-      {/* Walls */}
-      <mesh position={[-10, 5, 0]}>
-        <boxGeometry args={[0.5, 10, 60]} />
-        <meshStandardMaterial color="#3a3a6a" />
-      </mesh>
-      <mesh position={[10, 5, 0]}>
-        <boxGeometry args={[0.5, 10, 60]} />
-        <meshStandardMaterial color="#3a3a6a" />
-      </mesh>
-      <mesh position={[0, 5, -30]}>
-        <boxGeometry args={[20, 10, 0.5]} />
-        <meshStandardMaterial color="#3a3a6a" />
-      </mesh>
-      <mesh position={[0, 5, 30]}>
-        <boxGeometry args={[20, 10, 0.5]} />
-        <meshStandardMaterial color="#3a3a6a" />
-      </mesh>
-
-      {/* Lights */}
-      {Array.from({ length: 12 }).map((_, i) => {
-        const z = -28 + i * 5;
-        return (
-          <group key={i} position={[0, 9.8, z]}>
-            <pointLight intensity={2.5} distance={15} color="#ffffff" />
-            <mesh>
-              <cylinderGeometry args={[0.3, 0.4, 0.2, 16]} />
-              <meshStandardMaterial emissive="#ffffff" emissiveIntensity={0.8} />
-            </mesh>
-          </group>
-        );
-      })}
-
-      {/* Doors */}
-      {classrooms.map((door, i) => (
-        <Door key={i} position={door.position} label={door.label} isClassInSession={false} />
-      ))}
-
-      {/* Other players */}
-      {Array.from(otherPlayers.values()).map((p) => (
-        <OtherPlayer
-          key={p.userId}
-          position={p.position}
-          rotationY={p.rotationY}
-          color={p.color}
-        />
-      ))}
-    </>
-  );
-}
-
-export function HallwayScene({ onEnterClassroom }: { onEnterClassroom?: (index: number) => void }) {
+export default function HallwayScene({ onEnterClassroom } : { onEnterClassroom?: (i:number)=>void }) {
   const navigate = useNavigate();
   const [nearDoorIndex, setNearDoorIndex] = useState<number | null>(null);
   const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1, 20));
-  const [playerRot, setPlayerRot] = useState(0);
-
-  const { otherPlayers } = useMultiplayer({
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const { localId, otherPlayers, sendDirectMessage } = useWebsocketMultiplayer({
     roomType: "hallway",
-    roomId: "",
-    localPosition: playerPos,
-    localRotation: playerRot,
+    localPosition: { x: playerPos.x, y: playerPos.y, z: playerPos.z },
   });
 
-  const {
-    nearbyPlayer,
-    chatOpen,
-    messages,
-    unreadCount,
-    openChat,
-    closeChat,
-    sendMessage,
-  } = useProximityChat(playerPos, otherPlayers);
+  // proximity detection to find the closest player
+  const [nearbyPlayerId, setNearbyPlayerId] = useState<string | null>(null);
+  useEffect(() => {
+    let id: string | null = null;
+    let minD = Infinity;
+    otherPlayers.forEach((p, uid) => {
+      const d = Math.hypot(p.position[0]-playerPos.x, p.position[2]-playerPos.z);
+      if (d < 3 && d < minD) { minD = d; id = uid; }
+    });
+    setNearbyPlayerId(id);
+  }, [otherPlayers, playerPos]);
 
-  const handleEnterDoor = (doorIndex: number) => {
-    if (onEnterClassroom) onEnterClassroom(doorIndex);
-  };
+  // chat state: map peerId -> messages
+  const [conversations, setConversations] = useState<Record<string, Array<{ from:string; text:string; ts:number }>>>({});
+  const [chatOpenFor, setChatOpenFor] = useState<string | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+
+  // incoming ws chat events
+  useEffect(() => {
+    const handler = (ev: CustomEvent) => {
+      const detail = ev.detail as { from:string; to:string; text:string; timestamp:number };
+      // ignore if message not for us
+      if (detail.to !== localId) return;
+      // append to conversation
+      setConversations(prev => {
+        const copy = { ...prev };
+        copy[detail.from] = [...(copy[detail.from] || []), { from: detail.from, text: detail.text, ts: detail.timestamp }];
+        return copy;
+      });
+      if (chatOpenFor !== detail.from) {
+        setUnreadCounts(prev => ({ ...prev, [detail.from]: (prev[detail.from] || 0) + 1 }));
+      }
+    };
+    window.addEventListener("ws:chat:message", handler as any);
+    return () => window.removeEventListener("ws:chat:message", handler as any);
+  }, [localId, chatOpenFor]);
+
+  function openChatWith(peerId: string) {
+    if (!peerId) return;
+    setChatOpenFor(peerId);
+    setUnreadCounts(prev => ({ ...prev, [peerId]: 0 }));
+  }
+
+  function closeChat() {
+    setChatOpenFor(null);
+  }
+
+  function sendMessageTo(peerId: string, text: string) {
+    if (!peerId || !text.trim()) return;
+    // append locally
+    const ts = Date.now();
+    setConversations(prev => {
+      const copy = { ...prev };
+      copy[peerId] = [...(copy[peerId] || []), { from: localId, text, ts }];
+      return copy;
+    });
+    // send via websocket hook
+    sendDirectMessage(peerId, text);
+  }
+
+  function handleEnterDoor(i:number) {
+    if (onEnterClassroom) onEnterClassroom(i);
+  }
 
   return (
     <div style={{ width: "100vw", height: "100vh" }}>
       <KeyboardControls map={keyboardMap}>
-        <Canvas shadows camera={{ position: [0, 3, 23], fov: 75 }}>
-          <Hallway
+        <Canvas shadows camera={{ position: [0, 3, 23], fov: 75 }} onCreated={({ camera }) => (cameraRef.current = camera)}>
+          <fog attach="fog" args={["#000015", 10, 60]} />
+          <hemisphereLight color="#cde7ff" groundColor="#0a0010" intensity={0.6} />
+          <directionalLight position={[12, 25, 10]} intensity={1.0} castShadow />
+          <Stars radius={50} depth={40} count={4000} factor={3.5} />
+          <Environment preset="night" />
+
+          <LocalPlayer
+            onPositionChange={(pos) => setPlayerPos(pos.clone())}
+            doors={classrooms}
             onDoorProximity={setNearDoorIndex}
-            onEnterDoor={handleEnterDoor}
-            otherPlayers={otherPlayers}
-            playerPosition={playerPos}
+            cameraRef={cameraRef}
           />
+
+          {/* Doors */}
+          {classrooms.map((d, i) => <Door key={i} position={d.position} label={d.label} isClassInSession={false} />)}
+
+          {/* render remote players */}
+          {Array.from(otherPlayers.entries()).map(([id, p]) => {
+            // if you have a remote glb/ avatar url, you can load it in OtherPlayer.
+            // We render OtherPlayer if available, otherwise fallback capsule.
+            const pos: [number, number, number] = [p.position[0], 1, p.position[2]];
+            return (
+              <group key={id} position={pos}>
+                {/* try to use your OtherPlayer component if it loads remote gltf */}
+                {/* <OtherPlayer userId={id} position={pos} rotationY={p.rotationY} color={p.color} /> */}
+                <FallbackAvatar color={p.color || "#ff6ea1"} position={[0,0,0]} />
+              </group>
+            );
+          })}
         </Canvas>
       </KeyboardControls>
 
       <ProximityChat
-        nearbyPlayerId={nearbyPlayer?.id || null}
-        chatOpen={chatOpen}
-        messages={messages}
-        unreadCount={unreadCount}
-        onOpenChat={openChat}
-        onCloseChat={closeChat}
-        onSendMessage={sendMessage}
+        nearbyPlayerId={nearbyPlayerId}
+        chatOpen={!!chatOpenFor}
+        messages={chatOpenFor ? (conversations[chatOpenFor] || []).map(m => ({ sender: m.from === localId ? "You" : chatOpenFor, text: m.text })) : []}
+        unreadCount={nearbyPlayerId ? (unreadCounts[nearbyPlayerId] || 0) : 0}
+        onOpenChat={() => nearbyPlayerId && openChatWith(nearbyPlayerId)}
+        onCloseChat={() => closeChat()}
+        onSendMessage={(text) => chatOpenFor && sendMessageTo(chatOpenFor, text)}
       />
 
+      {/* Door hint */}
       {nearDoorIndex !== null && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: "100px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(255,255,255,0.9)",
-            padding: "15px 25px",
-            borderRadius: "10px",
-            border: "2px solid #00ffff",
-            zIndex: 50,
-            textAlign: "center",
-          }}
-        >
-          <div style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "10px" }}>
-            {classrooms[nearDoorIndex].label}
-          </div>
-          <div style={{ fontSize: "0.9rem" }}>Press E to enter</div>
+        <div style={{ position:"absolute", bottom:120, left:"50%", transform:"translateX(-50%)", background:"rgba(255,255,255,0.9)", padding: "12px 20px", borderRadius:10, border:"2px solid #00ffff" }}>
+          <div style={{ fontWeight:700 }}>{classrooms[nearDoorIndex].label}</div>
+          <div>Press E to enter</div>
         </div>
       )}
 
-      <div
-        style={{
-          position: "absolute",
-          bottom: "20px",
-          left: "50%",
-          transform: "translateX(-50%)",
-          background: "rgba(0,0,0,0.7)",
-          padding: "15px 25px",
-          borderRadius: "10px",
-          border: "1px solid #00ffff",
-          color: "#00ffff",
-          fontFamily: "monospace",
-          fontSize: "14px",
-          textAlign: "center",
-        }}
-      >
-        <div>🎮 WASD / Arr Move | 🖱️ Move Camera Automatically</div>
-        <div style={{ marginTop: "5px" }}>🚪 Get close to doors and press E to enter</div>
+      {/* Controls helper */}
+      <div style={{ position:"absolute", bottom:20, left:"50%", transform:"translateX(-50%)", color:"#00ffff", fontFamily:"monospace", padding:"12px 18px", background:"rgba(0,0,0,0.7)", borderRadius:8 }}>
+        <div>🎮 WASD: Move | 🖱️: Hold left mouse + move (camera rotate) | Wheel: Zoom</div>
+        <div style={{ marginTop:6 }}>💬 Approach a player to chat (1:1). New players spawn with unique color avatars.</div>
       </div>
     </div>
   );
 }
 
-export default HallwayScene;
 
