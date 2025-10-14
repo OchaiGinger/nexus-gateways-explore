@@ -8,6 +8,7 @@ interface ProximityChatProps {
   nearbyPlayerId: string | null;
   chatOpen: boolean;
   messages: Array<{ sender: string; text: string }>;
+  unreadCount: number;
   onOpenChat: () => void;
   onCloseChat: () => void;
   onSendMessage: (text: string) => void;
@@ -17,6 +18,7 @@ export const ProximityChat = ({
   nearbyPlayerId,
   chatOpen,
   messages,
+  unreadCount,
   onOpenChat,
   onCloseChat,
   onSendMessage,
@@ -36,11 +38,16 @@ export const ProximityChat = ({
       <div className="fixed bottom-24 right-4 z-20">
         <Button
           onClick={onOpenChat}
-          className="bg-primary hover:bg-primary/90 text-white shadow-lg animate-pulse"
+          className="bg-primary hover:bg-primary/90 text-white shadow-lg animate-pulse relative"
           size="lg"
         >
           <MessageCircle className="mr-2 h-5 w-5" />
           Chat with {nearbyPlayerId.substring(0, 8)}
+          {unreadCount > 0 && (
+            <span className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+              {unreadCount}
+            </span>
+          )}
         </Button>
       </div>
     );

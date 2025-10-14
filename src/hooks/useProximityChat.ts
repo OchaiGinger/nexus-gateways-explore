@@ -12,6 +12,7 @@ export const useProximityChat = (
   const [nearbyPlayer, setNearbyPlayer] = useState<{ id: string; player: OtherPlayer } | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<Array<{ sender: string; text: string }>>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     // Find closest player within chat distance
@@ -48,12 +49,14 @@ export const useProximityChat = (
   const openChat = () => {
     if (nearbyPlayer) {
       setChatOpen(true);
+      setUnreadCount(0); // Clear unread when opening chat
     }
   };
 
   const closeChat = () => {
     setChatOpen(false);
     setMessages([]);
+    setUnreadCount(0);
   };
 
   const sendMessage = (text: string) => {
@@ -62,10 +65,15 @@ export const useProximityChat = (
       setMessages(prev => [...prev, { sender: 'You', text }]);
       // Simulate response
       setTimeout(() => {
-        setMessages(prev => [...prev, { 
+        const newMessage = { 
           sender: nearbyPlayer.id.substring(0, 8), 
           text: `Echo: ${text}` 
-        }]);
+        };
+        setMessages(prev => [...prev, newMessage]);
+        // Increment unread if chat is not open
+        if (!chatOpen) {
+          setUnreadCount(prev => prev + 1);
+        }
       }, 500);
     }
   };
@@ -74,6 +82,7 @@ export const useProximityChat = (
     nearbyPlayer,
     chatOpen,
     messages,
+    unreadCount,
     openChat,
     closeChat,
     sendMessage,

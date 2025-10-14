@@ -33,6 +33,7 @@ export function Classroom({ roomName, onExit }: { roomName: string; onExit: () =
     nearbyPlayer,
     chatOpen,
     messages,
+    unreadCount,
     openChat,
     closeChat,
     sendMessage,
@@ -149,6 +150,7 @@ export function Classroom({ roomName, onExit }: { roomName: string; onExit: () =
         nearbyPlayerId={nearbyPlayer?.id || null}
         chatOpen={chatOpen}
         messages={messages}
+        unreadCount={unreadCount}
         onOpenChat={openChat}
         onCloseChat={closeChat}
         onSendMessage={sendMessage}

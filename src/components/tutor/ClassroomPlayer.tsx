@@ -1,7 +1,7 @@
-import React, { useRef, useState, useEffect } from "react";
-import * as THREE from "three";
-import { useFrame } from "@react-three/fiber";
-import { useGLTF, useAnimations } from "@react-three/drei";
+import { useRef, useEffect, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+import { useGLTF } from '@react-three/drei';
 
 function ClassroomPlayer({
   seats,
@@ -25,187 +25,157 @@ function ClassroomPlayer({
   cameraRef: React.RefObject<any>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const characterRef = useRef<THREE.Group>(null);
   const velocity = useRef(new THREE.Vector3());
-  
-  const keys = useRef<Record<string, boolean>>({});
+  const [characterScene, setCharacterScene] = useState<THREE.Object3D | null>(null);
 
   // Load character model
-  const { scene, animations } = useGLTF("/models/character.glb");
-  const { actions } = useAnimations(animations, characterRef);
-
-  // Clone the scene for proper instancing
-  const characterModel = React.useMemo(() => {
-    const model = scene.clone();
-    model.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
+  useEffect(() => {
+    try {
+      const gltf = useGLTF("/models/character.glb");
+      if (gltf && gltf.scene) {
+        gltf.scene.traverse((child: any) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        setCharacterScene(gltf.scene);
       }
-    });
-    return model;
-  }, [scene]);
+    } catch (err) {
+      console.error("❌ Failed to load character.glb:", err);
+    }
+  }, []);
 
+  // Manual keyboard event listeners (exactly like Scene3D.tsx)
+  const keys = useRef<Record<string, boolean>>({});
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       keys.current[e.code] = true;
-      
-      // Sit/Stand with E key
-      if (e.code === "KeyE") {
+      if (e.code === 'KeyE') {
         if (isSitting) {
           onStandRequest();
-        } else if (nearSeatIndex !== null) {
+        } else {
           onSitRequest();
         }
       }
     };
-
     const handleKeyUp = (e: KeyboardEvent) => {
       keys.current[e.code] = false;
     };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
   }, [isSitting, onSitRequest, onStandRequest]);
 
-  const [nearSeatIndex, setNearSeatIndex] = useState<number | null>(null);
-  const tmpVec = new THREE.Vector3();
-
-  // Classroom boundaries
-  const CLASSROOM_BOUNDS = {
-    minX: -8, maxX: 8,
-    minZ: -9, maxZ: 2,
-    minY: 0, maxY: 10
-  };
-
-  const SEAT_DISTANCE_THRESHOLD = 1.5;
-
   useFrame((state, delta) => {
-    if (!characterRef.current) return;
+    if (!groupRef.current) return;
 
+    // If sitting, don't move
     if (isSitting && sittingPosition) {
-      // Lock position when sitting
-      characterRef.current.position.copy(sittingPosition);
-      characterRef.current.rotation.y = Math.PI;
+      groupRef.current.position.copy(sittingPosition);
+      groupRef.current.position.y = 0.5;
+      onPositionChange?.(groupRef.current.position.clone());
+      return;
+    }
+
+    // Get keyboard input
+    const forward = keys.current['KeyW'] || keys.current['ArrowUp'];
+    const backward = keys.current['KeyS'] || keys.current['ArrowDown'];
+    const left = keys.current['KeyA'] || keys.current['ArrowLeft'];
+    const right = keys.current['KeyD'] || keys.current['ArrowRight'];
+
+    const inputX = (right ? 1 : 0) - (left ? 1 : 0);
+    const inputZ = (forward ? 1 : 0) - (backward ? 1 : 0);
+
+    // Camera-relative movement (exactly like Scene3D.tsx)
+    const camera = state.camera;
+    const forwardVec = new THREE.Vector3();
+    camera.getWorldDirection(forwardVec);
+    forwardVec.y = 0;
+    forwardVec.normalize();
+
+    const rightVec = new THREE.Vector3();
+    rightVec.crossVectors(forwardVec, camera.up).normalize();
+
+    const moveDir = new THREE.Vector3();
+    moveDir.copy(forwardVec).multiplyScalar(inputZ).addScaledVector(rightVec, inputX);
+
+    const speed = 6;
+    if (moveDir.lengthSq() > 0.0001) {
+      moveDir.normalize();
+      const targetVel = moveDir.multiplyScalar(speed);
+      velocity.current.lerp(targetVel, 0.15);
     } else {
-      // Get keyboard input
-      const forward = keys.current["KeyW"] || keys.current["ArrowUp"];
-      const backward = keys.current["KeyS"] || keys.current["ArrowDown"];
-      const left = keys.current["KeyA"] || keys.current["ArrowLeft"];
-      const right = keys.current["KeyD"] || keys.current["ArrowRight"];
-
-      const inputX = (right ? 1 : 0) - (left ? 1 : 0);
-      const inputZ = (forward ? 1 : 0) - (backward ? 1 : 0);
-
-      // Camera-relative movement like Scene3D
-      const camera = state.camera;
-      const forwardVec = new THREE.Vector3();
-      camera.getWorldDirection(forwardVec);
-      forwardVec.y = 0;
-      forwardVec.normalize();
-      const rightVec = new THREE.Vector3();
-      rightVec.crossVectors(forwardVec, camera.up).normalize();
-      const moveDir = new THREE.Vector3();
-      moveDir.copy(forwardVec).multiplyScalar(inputZ).addScaledVector(rightVec, inputX);
-
-      const speed = 6;
-      if (moveDir.lengthSq() > 0.0001) {
-        moveDir.normalize();
-        const targetVel = moveDir.multiplyScalar(speed);
-        velocity.current.lerp(targetVel, 0.15);
-      } else {
-        velocity.current.lerp(new THREE.Vector3(), 0.12);
-      }
-
-      const predictedX = characterRef.current.position.x + velocity.current.x * delta;
-      const predictedZ = characterRef.current.position.z + velocity.current.z * delta;
-
-      // Boundary checks
-      if (predictedX >= CLASSROOM_BOUNDS.minX && predictedX <= CLASSROOM_BOUNDS.maxX &&
-          predictedZ >= CLASSROOM_BOUNDS.minZ && predictedZ <= CLASSROOM_BOUNDS.maxZ) {
-        characterRef.current.position.x = predictedX;
-        characterRef.current.position.z = predictedZ;
-      } else {
-        velocity.current.set(0, velocity.current.y, 0);
-      }
-
-      // Rotate character to face movement direction
-      if (velocity.current.lengthSq() > 0.0001) {
-        const yaw = Math.atan2(velocity.current.x, velocity.current.z);
-        characterRef.current.rotation.y = THREE.MathUtils.damp(
-          characterRef.current.rotation.y,
-          yaw,
-          6,
-          delta
-        );
-      }
+      velocity.current.lerp(new THREE.Vector3(), 0.12);
     }
 
-    // Notify parent components
-    if (onPositionChange) {
-      onPositionChange(characterRef.current.position);
+    // Apply velocity with boundary checks
+    const predictedX = groupRef.current.position.x + velocity.current.x * delta;
+    const predictedZ = groupRef.current.position.z + velocity.current.z * delta;
+
+    // Classroom bounds
+    const bounds = {
+      minX: -8,
+      maxX: 8,
+      minZ: -8,
+      maxZ: 2,
+    };
+
+    if (predictedX >= bounds.minX && predictedX <= bounds.maxX) {
+      groupRef.current.position.x = predictedX;
     }
-    if (onRotationChange) {
-      onRotationChange(characterRef.current.rotation.y);
+    if (predictedZ >= bounds.minZ && predictedZ <= bounds.maxZ) {
+      groupRef.current.position.z = predictedZ;
     }
 
-    // Check seat proximity
+    // Rotate character to face movement direction
+    if (velocity.current.lengthSq() > 0.0001) {
+      const yaw = Math.atan2(velocity.current.x, velocity.current.z);
+      groupRef.current.rotation.y = THREE.MathUtils.damp(groupRef.current.rotation.y, yaw, 6, delta);
+      onRotationChange?.(groupRef.current.rotation.y);
+    }
+
+    // Update camera target
+    if (cameraRef?.current) {
+      cameraRef.current.target.set(
+        groupRef.current.position.x,
+        groupRef.current.position.y + 1,
+        groupRef.current.position.z
+      );
+    }
+
+    onPositionChange?.(groupRef.current.position.clone());
+
+    // Check proximity to seats
     let closestIndex: number | null = null;
     let closestDist = Infinity;
+    const SEAT_DISTANCE_THRESHOLD = 1.5;
 
     seats.forEach((seat, i) => {
-      tmpVec.set(seat.position[0], seat.position[1], seat.position[2]);
-      const dist = tmpVec.distanceTo(characterRef.current!.position);
+      const seatPos = new THREE.Vector3(...seat.position);
+      const dist = seatPos.distanceTo(groupRef.current!.position);
       if (dist <= SEAT_DISTANCE_THRESHOLD && dist < closestDist) {
         closestDist = dist;
         closestIndex = i;
       }
     });
 
-    setNearSeatIndex(closestIndex);
     onSeatProximity(closestIndex);
-
-    // Update animations
-    if (actions) {
-      if (isSitting) {
-        if (actions.Sit) {
-          actions.Sit.play();
-          if (actions.Walk) actions.Walk.stop();
-          if (actions.Idle) actions.Idle.stop();
-        }
-      } else if (keys.current["KeyW"] || keys.current["KeyS"] || 
-                 keys.current["KeyA"] || keys.current["KeyD"] ||
-                 keys.current["ArrowUp"] || keys.current["ArrowDown"] ||
-                 keys.current["ArrowLeft"] || keys.current["ArrowRight"]) {
-        if (actions.Walk) {
-          actions.Walk.play();
-          if (actions.Idle) actions.Idle.stop();
-          if (actions.Sit) actions.Sit.stop();
-        }
-      } else {
-        if (actions.Idle) {
-          actions.Idle.play();
-          if (actions.Walk) actions.Walk.stop();
-          if (actions.Sit) actions.Sit.stop();
-        }
-      }
-    }
   });
 
   return (
-    <group ref={groupRef}>
-      <group ref={characterRef} position={[0, 0, 5]}>
-        <primitive 
-          object={characterModel} 
-          scale={0.8}
-          rotation={[0, Math.PI, 0]}
-        />
-      </group>
+    <group ref={groupRef} position={[0, 0, 5]}>
+      {characterScene ? (
+        <primitive object={characterScene} scale={[1.2, 1.2, 1.2]} />
+      ) : (
+        <mesh>
+          <boxGeometry args={[1, 2, 1]} />
+          <meshStandardMaterial color="#00ffff" />
+        </mesh>
+      )}
     </group>
   );
 }

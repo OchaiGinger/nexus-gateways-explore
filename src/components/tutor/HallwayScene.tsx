@@ -257,6 +257,7 @@ export function HallwayScene({ onEnterClassroom }: { onEnterClassroom?: (index: 
     nearbyPlayer,
     chatOpen,
     messages,
+    unreadCount,
     openChat,
     closeChat,
     sendMessage,
@@ -295,6 +296,7 @@ export function HallwayScene({ onEnterClassroom }: { onEnterClassroom?: (index: 
         nearbyPlayerId={nearbyPlayer?.id || null}
         chatOpen={chatOpen}
         messages={messages}
+        unreadCount={unreadCount}
         onOpenChat={openChat}
         onCloseChat={closeChat}
         onSendMessage={sendMessage}
