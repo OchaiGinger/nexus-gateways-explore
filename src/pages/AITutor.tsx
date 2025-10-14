@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { HallwaySceneFPS } from "@/components/tutor/HallwayScene";
+import { HallwayScene } from "@/components/tutor/HallwayScene";
 import { Classroom } from "@/components/tutor/Classroom";
 
 const classroomNames = [
@@ -40,7 +40,7 @@ const AITutor = () => {
     }
   }
 
-  return <HallwaySceneFPS onEnterClassroom={handleEnterClassroom} />;
+  return <HallwayScene onEnterClassroom={handleEnterClassroom} />;
 };
 
 export default AITutor;

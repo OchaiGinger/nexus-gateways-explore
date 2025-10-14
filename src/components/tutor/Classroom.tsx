@@ -1,6 +1,6 @@
-import { Suspense, useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Stars } from "@react-three/drei";
+import { Stars, Environment, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { Desk } from "./Desk";
 import { Door } from "./Door";
@@ -17,6 +17,7 @@ export function Classroom({ roomName, onExit }: { roomName: string; onExit: () =
   const [sittingPosition, setSittingPosition] = useState<THREE.Vector3 | null>(null);
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 0, 5));
   const [playerRotation, setPlayerRotation] = useState(Math.PI);
+  const cameraControlsRef = useRef<any>(null);
 
   // Multiplayer integration
   const { otherPlayers } = useMultiplayer({
@@ -83,10 +84,24 @@ export function Classroom({ roomName, onExit }: { roomName: string; onExit: () =
       <Canvas shadows camera={{ position: [0, 3, 8], fov: 75 }}>
         <fog attach="fog" args={["#1a1a2e", 10, 50]} />
         <Stars radius={100} depth={50} count={1000} factor={2} />
+        <Environment preset="sunset" />
 
         <ambientLight intensity={0.4} />
         <directionalLight position={[5, 10, 5]} intensity={1} castShadow />
         <hemisphereLight color="#a0a0ff" intensity={0.4} />
+        
+        <OrbitControls
+          ref={cameraControlsRef}
+          target={[playerPosition.x, playerPosition.y + 1, playerPosition.z]}
+          enablePan={false}
+          enableZoom={true}
+          minDistance={2}
+          maxDistance={8}
+          minPolarAngle={Math.PI / 6}
+          maxPolarAngle={Math.PI / 2.5}
+          enableDamping
+          dampingFactor={0.05}
+        />
 
         {/* Classroom geometry */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -103,6 +118,7 @@ export function Classroom({ roomName, onExit }: { roomName: string; onExit: () =
           onStandRequest={handleStandUp}
           onPositionChange={setPlayerPosition}
           onRotationChange={setPlayerRotation}
+          cameraRef={cameraControlsRef}
         />
         
         {Array.from(otherPlayers.values()).map((otherPlayer) => (

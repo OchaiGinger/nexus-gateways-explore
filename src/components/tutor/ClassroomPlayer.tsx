@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import * as THREE from "three";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import { useGLTF, useAnimations } from "@react-three/drei";
 
 function ClassroomPlayer({
@@ -12,6 +12,7 @@ function ClassroomPlayer({
   onStandRequest,
   onPositionChange,
   onRotationChange,
+  cameraRef,
 }: {
   seats: { position: [number, number, number] }[];
   onSeatProximity: (index: number | null) => void;
@@ -21,8 +22,8 @@ function ClassroomPlayer({
   onStandRequest: () => void;
   onPositionChange?: (position: THREE.Vector3) => void;
   onRotationChange?: (rotation: number) => void;
+  cameraRef: React.RefObject<any>;
 }) {
-  const { camera } = useThree();
   const groupRef = useRef<THREE.Group>(null);
   const characterRef = useRef<THREE.Group>(null);
   const velocity = useRef(new THREE.Vector3());
@@ -91,14 +92,6 @@ function ClassroomPlayer({
       // Lock position when sitting
       characterRef.current.position.copy(sittingPosition);
       characterRef.current.rotation.y = Math.PI;
-      
-      // Camera lower and closer when sitting
-      camera.position.set(
-        sittingPosition.x,
-        sittingPosition.y + 1.0,
-        sittingPosition.z + 0.8
-      );
-      camera.lookAt(0, 2, -10);
     } else {
       // Get keyboard input
       const forward = keys.current["KeyW"] || keys.current["ArrowUp"];
@@ -109,7 +102,8 @@ function ClassroomPlayer({
       const inputX = (right ? 1 : 0) - (left ? 1 : 0);
       const inputZ = (forward ? 1 : 0) - (backward ? 1 : 0);
 
-      // Camera-relative movement
+      // Camera-relative movement like Scene3D
+      const camera = state.camera;
       const forwardVec = new THREE.Vector3();
       camera.getWorldDirection(forwardVec);
       forwardVec.y = 0;
@@ -150,24 +144,6 @@ function ClassroomPlayer({
           delta
         );
       }
-
-      // Camera follows character - lower and closer
-      const cameraDistance = 2.2;
-      const cameraHeight = 0.8;
-      const yaw = Math.atan2(
-        camera.position.x - characterRef.current.position.x,
-        camera.position.z - characterRef.current.position.z
-      );
-      const targetCamPos = new THREE.Vector3(
-        characterRef.current.position.x + Math.sin(yaw) * cameraDistance,
-        characterRef.current.position.y + cameraHeight,
-        characterRef.current.position.z + Math.cos(yaw) * cameraDistance
-      );
-      camera.position.lerp(targetCamPos, 0.1);
-      
-      const lookTarget = characterRef.current.position.clone();
-      lookTarget.y += 1;
-      camera.lookAt(lookTarget);
     }
 
     // Notify parent components
