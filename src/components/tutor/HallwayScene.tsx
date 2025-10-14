@@ -333,7 +333,7 @@ export function HallwayScene({ onEnterClassroom }: { onEnterClassroom?: (index: 
           textAlign: "center",
         }}
       >
-        <div>🎮 WASD / Arrows: Move | 🖱️ Move Camera Automatically</div>
+        <div>🎮 WASD / Arr Move | 🖱️ Move Camera Automatically</div>
         <div style={{ marginTop: "5px" }}>🚪 Get close to doors and press E to enter</div>
       </div>
     </div>
