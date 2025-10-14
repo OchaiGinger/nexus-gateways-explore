@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Stars, Environment, OrbitControls, useGLTF, Text } from "@react-three/drei";
+import { Stars, Environment, Text } from "@react-three/drei";
+import { KeyboardControls } from "@react-three/drei";
 import { useNavigate } from "react-router-dom";
 import * as THREE from "three";
 import { Door } from "./Door";
@@ -8,6 +9,14 @@ import { useMultiplayer } from "@/hooks/useMultiplayer";
 import { OtherPlayer } from "./OtherPlayer";
 import { ProximityChat } from "./ProximityChat";
 import { useProximityChat } from "@/hooks/useProximityChat";
+import { useGLTF } from "@react-three/drei";
+
+const keyboardMap = [
+  { name: "forward", keys: ["ArrowUp", "KeyW"] },
+  { name: "backward", keys: ["ArrowDown", "KeyS"] },
+  { name: "left", keys: ["ArrowLeft", "KeyA"] },
+  { name: "right", keys: ["ArrowRight", "KeyD"] },
+];
 
 const classrooms = [
   { label: "Mathematics", position: [-6, 0, -20] as [number, number, number] },
@@ -18,7 +27,7 @@ const classrooms = [
   { label: "Literature", position: [6, 0, 5] as [number, number, number] },
 ];
 
-function HallwayPlayer({ 
+function HallwayPlayer({
   onPositionChange,
   doors,
   onDoorProximity,
@@ -33,16 +42,16 @@ function HallwayPlayer({
   const nearDoor = useRef<number | null>(null);
 
   const { scene } = useGLTF("/models/character.glb");
-  const characterModel = scene.clone();
+  const model = scene.clone();
 
   useEffect(() => {
-    characterModel.traverse((child) => {
+    model.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         child.castShadow = true;
         child.receiveShadow = true;
       }
     });
-  }, [characterModel]);
+  }, [model]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => (keys.current[e.code] = true);
@@ -66,7 +75,7 @@ function HallwayPlayer({
     const inputX = (right ? 1 : 0) - (left ? 1 : 0);
     const inputZ = (forward ? 1 : 0) - (backward ? 1 : 0);
 
-    // Camera-relative movement like Scene3D
+    // camera-relative movement
     const camera = state.camera;
     const forwardVec = new THREE.Vector3();
     camera.getWorldDirection(forwardVec);
@@ -74,6 +83,7 @@ function HallwayPlayer({
     forwardVec.normalize();
     const rightVec = new THREE.Vector3();
     rightVec.crossVectors(forwardVec, camera.up).normalize();
+
     const moveDir = new THREE.Vector3();
     moveDir.copy(forwardVec).multiplyScalar(inputZ).addScaledVector(rightVec, inputX);
 
@@ -89,11 +99,11 @@ function HallwayPlayer({
     groupRef.current.position.x += velocity.current.x * delta;
     groupRef.current.position.z += velocity.current.z * delta;
 
-    // Boundary limits for hallway
+    // simple bounds
     groupRef.current.position.x = Math.max(-8, Math.min(8, groupRef.current.position.x));
     groupRef.current.position.z = Math.max(-25, Math.min(25, groupRef.current.position.z));
 
-    // Rotate character to face movement direction
+    // rotate toward movement
     if (velocity.current.lengthSq() > 0.0001) {
       const yaw = Math.atan2(velocity.current.x, velocity.current.z);
       groupRef.current.rotation.y = THREE.MathUtils.damp(
@@ -104,18 +114,22 @@ function HallwayPlayer({
       );
     }
 
-    // Check door proximity
-    let closestDoor: number | null = null;
-    let minDistance = Infinity;
+    // camera follow
+    const camOffset = new THREE.Vector3(0, 3, 6);
+    const camTarget = groupRef.current.position.clone().add(camOffset);
+    state.camera.position.lerp(camTarget, 0.05);
+    state.camera.lookAt(groupRef.current.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
 
-    doors.forEach((door, index) => {
-      const distance = groupRef.current!.position.distanceTo(
+    // check door proximity
+    let closestDoor: number | null = null;
+    let minDist = Infinity;
+    doors.forEach((door, i) => {
+      const d = groupRef.current!.position.distanceTo(
         new THREE.Vector3(door.position[0], door.position[1], door.position[2])
       );
-      
-      if (distance < 3 && distance < minDistance) {
-        closestDoor = index;
-        minDistance = distance;
+      if (d < 3 && d < minDist) {
+        closestDoor = i;
+        minDist = d;
       }
     });
 
@@ -129,7 +143,7 @@ function HallwayPlayer({
 
   return (
     <group ref={groupRef} position={[0, 1, 20]}>
-      <primitive object={characterModel} scale={1.2} />
+      <primitive object={model} scale={1.2} />
     </group>
   );
 }
@@ -147,40 +161,32 @@ function Hallway({
 }) {
   const [nearDoor, setNearDoor] = useState<number | null>(null);
 
-  const handleDoorProximity = (doorIndex: number | null) => {
-    setNearDoor(doorIndex);
-    onDoorProximity(doorIndex);
+  const handleDoorProximity = (index: number | null) => {
+    setNearDoor(index);
+    onDoorProximity(index);
   };
 
   useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.code === "KeyE" && nearDoor !== null) {
-        onEnterDoor(nearDoor);
-      }
+    const handleE = (e: KeyboardEvent) => {
+      if (e.code === "KeyE" && nearDoor !== null) onEnterDoor(nearDoor);
     };
-
-    window.addEventListener("keydown", handleKeyPress);
-    return () => window.removeEventListener("keydown", handleKeyPress);
+    window.addEventListener("keydown", handleE);
+    return () => window.removeEventListener("keydown", handleE);
   }, [nearDoor, onEnterDoor]);
 
   return (
     <>
       <fog attach="fog" args={["#000015", 10, 60]} />
       <hemisphereLight color="#cde7ff" groundColor="#0a0010" intensity={0.6} />
-      <directionalLight
-        position={[12, 25, 10]}
-        intensity={1.0}
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-      />
+      <directionalLight position={[12, 25, 10]} intensity={1.0} castShadow />
+
       <Stars radius={50} depth={40} count={4000} factor={3.5} />
       <Environment preset="night" />
 
       <HallwayPlayer
         onPositionChange={() => {}}
-        onDoorProximity={handleDoorProximity}
         doors={classrooms}
+        onDoorProximity={handleDoorProximity}
       />
 
       {/* Floor */}
@@ -190,49 +196,49 @@ function Hallway({
       </mesh>
 
       {/* Walls */}
-      <mesh position={[-10, 5, 0]} receiveShadow castShadow>
+      <mesh position={[-10, 5, 0]}>
         <boxGeometry args={[0.5, 10, 60]} />
         <meshStandardMaterial color="#3a3a6a" />
       </mesh>
-      <mesh position={[10, 5, 0]} receiveShadow castShadow>
+      <mesh position={[10, 5, 0]}>
         <boxGeometry args={[0.5, 10, 60]} />
         <meshStandardMaterial color="#3a3a6a" />
       </mesh>
-      <mesh position={[0, 5, -30]} receiveShadow castShadow>
+      <mesh position={[0, 5, -30]}>
         <boxGeometry args={[20, 10, 0.5]} />
         <meshStandardMaterial color="#3a3a6a" />
       </mesh>
-      <mesh position={[0, 5, 30]} receiveShadow castShadow>
+      <mesh position={[0, 5, 30]}>
         <boxGeometry args={[20, 10, 0.5]} />
         <meshStandardMaterial color="#3a3a6a" />
       </mesh>
 
-      {/* Ceiling lights */}
+      {/* Lights */}
       {Array.from({ length: 12 }).map((_, i) => {
-        const zPos = -28 + i * 5;
+        const z = -28 + i * 5;
         return (
-          <group key={i} position={[0, 9.8, zPos]}>
+          <group key={i} position={[0, 9.8, z]}>
             <pointLight intensity={2.5} distance={15} color="#ffffff" />
-            <mesh castShadow>
+            <mesh>
               <cylinderGeometry args={[0.3, 0.4, 0.2, 16]} />
-              <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.8} />
+              <meshStandardMaterial emissive="#ffffff" emissiveIntensity={0.8} />
             </mesh>
           </group>
         );
       })}
 
       {/* Doors */}
-      {classrooms.map((classroom, index) => (
-        <Door key={index} position={classroom.position} label={classroom.label} isClassInSession={false} />
+      {classrooms.map((door, i) => (
+        <Door key={i} position={door.position} label={door.label} isClassInSession={false} />
       ))}
 
       {/* Other players */}
-      {Array.from(otherPlayers.values()).map((otherPlayer) => (
+      {Array.from(otherPlayers.values()).map((p) => (
         <OtherPlayer
-          key={otherPlayer.userId}
-          position={otherPlayer.position}
-          rotationY={otherPlayer.rotationY}
-          color={otherPlayer.color}
+          key={p.userId}
+          position={p.position}
+          rotationY={p.rotationY}
+          color={p.color}
         />
       ))}
     </>
@@ -243,14 +249,13 @@ export function HallwayScene({ onEnterClassroom }: { onEnterClassroom?: (index: 
   const navigate = useNavigate();
   const [nearDoorIndex, setNearDoorIndex] = useState<number | null>(null);
   const [playerPos, setPlayerPos] = useState(new THREE.Vector3(0, 1, 20));
-  const [playerRotation, setPlayerRotation] = useState(0);
-  const cameraControlsRef = useRef<any>(null);
+  const [playerRot, setPlayerRot] = useState(0);
 
   const { otherPlayers } = useMultiplayer({
-    roomType: 'hallway',
-    roomId: '',
+    roomType: "hallway",
+    roomId: "",
     localPosition: playerPos,
-    localRotation: playerRotation,
+    localRotation: playerRot,
   });
 
   const {
@@ -264,33 +269,21 @@ export function HallwayScene({ onEnterClassroom }: { onEnterClassroom?: (index: 
   } = useProximityChat(playerPos, otherPlayers);
 
   const handleEnterDoor = (doorIndex: number) => {
-    if (onEnterClassroom) {
-      onEnterClassroom(doorIndex);
-    }
+    if (onEnterClassroom) onEnterClassroom(doorIndex);
   };
 
   return (
     <div style={{ width: "100vw", height: "100vh" }}>
-      <Canvas shadows camera={{ position: [0, 3, 23], fov: 75 }}>
-        <OrbitControls
-          ref={cameraControlsRef}
-          target={[playerPos.x, playerPos.y + 1, playerPos.z]}
-          enablePan={false}
-          enableZoom={true}
-          minDistance={2}
-          maxDistance={8}
-          minPolarAngle={Math.PI / 6}
-          maxPolarAngle={Math.PI / 2.5}
-          enableDamping
-          dampingFactor={0.05}
-        />
-        <Hallway 
-          onDoorProximity={setNearDoorIndex} 
-          onEnterDoor={handleEnterDoor} 
-          otherPlayers={otherPlayers}
-          playerPosition={playerPos}
-        />
-      </Canvas>
+      <KeyboardControls map={keyboardMap}>
+        <Canvas shadows camera={{ position: [0, 3, 23], fov: 75 }}>
+          <Hallway
+            onDoorProximity={setNearDoorIndex}
+            onEnterDoor={handleEnterDoor}
+            otherPlayers={otherPlayers}
+            playerPosition={playerPos}
+          />
+        </Canvas>
+      </KeyboardControls>
 
       <ProximityChat
         nearbyPlayerId={nearbyPlayer?.id || null}
@@ -309,7 +302,7 @@ export function HallwayScene({ onEnterClassroom }: { onEnterClassroom?: (index: 
             bottom: "100px",
             left: "50%",
             transform: "translateX(-50%)",
-            background: "rgba(255, 255, 255, 0.9)",
+            background: "rgba(255,255,255,0.9)",
             padding: "15px 25px",
             borderRadius: "10px",
             border: "2px solid #00ffff",
@@ -330,18 +323,17 @@ export function HallwayScene({ onEnterClassroom }: { onEnterClassroom?: (index: 
           bottom: "20px",
           left: "50%",
           transform: "translateX(-50%)",
-          background: "rgba(0, 0, 0, 0.7)",
+          background: "rgba(0,0,0,0.7)",
           padding: "15px 25px",
           borderRadius: "10px",
           border: "1px solid #00ffff",
-          zIndex: 10,
           color: "#00ffff",
           fontFamily: "monospace",
           fontSize: "14px",
           textAlign: "center",
         }}
       >
-        <div>🎮 WASD / Arrows: Move | 🖱️ Mouse: Rotate Camera</div>
+        <div>🎮 WASD / Arrows: Move | 🖱️ Move Camera Automatically</div>
         <div style={{ marginTop: "5px" }}>🚪 Get close to doors and press E to enter</div>
       </div>
     </div>
@@ -349,3 +341,4 @@ export function HallwayScene({ onEnterClassroom }: { onEnterClassroom?: (index: 
 }
 
 export default HallwayScene;
+
