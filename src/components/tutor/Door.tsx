@@ -6,11 +6,13 @@ interface DoorProps {
   label: string;
   isClassInSession: boolean;
   onClick?: () => void;
+  rotation?: number;
+  isNear?: boolean;
 }
 
-export function Door({ position, label, isClassInSession, onClick }: DoorProps) {
+export function Door({ position, label, isClassInSession, onClick, rotation = 0, isNear = false }: DoorProps) {
   return (
-    <group position={position} onClick={onClick}>
+    <group position={position} rotation={[0, rotation, 0]} onClick={onClick}>
       {/* Door frame */}
       <mesh position={[0, 0, 0]}>
         <boxGeometry args={[2.5, 4, 0.2]} />
@@ -24,6 +26,8 @@ export function Door({ position, label, isClassInSession, onClick }: DoorProps) 
           color={isClassInSession ? "#1a4d1a" : "#4d1a1a"}
           metalness={0.6}
           roughness={0.3}
+          emissive={isNear ? "#ffaa00" : "#000000"}
+          emissiveIntensity={isNear ? 0.3 : 0}
         />
       </mesh>
 
@@ -64,6 +68,19 @@ export function Door({ position, label, isClassInSession, onClick }: DoorProps) 
       >
         {isClassInSession ? "In Session" : "Available"}
       </Text>
+
+      {/* "Press E" indicator when near */}
+      {isNear && (
+        <Text
+          position={[0, -2.5, 0.15]}
+          fontSize={0.3}
+          color="#00ff00"
+          anchorX="center"
+          anchorY="middle"
+        >
+          Press E to Enter
+        </Text>
+      )}
     </group>
   );
 }
