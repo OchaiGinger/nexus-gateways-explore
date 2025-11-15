@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import React from "react";
 import { Canvas } from "@react-three/fiber";
 import { Stars, Text } from "@react-three/drei";
 import * as THREE from "three";
@@ -44,6 +45,12 @@ const hallwayWalls = [
   { position: [30.5, 0, -12] as [number, number, number], width: 1, depth: 16 },
   { position: [20, 0, -20] as [number, number, number], width: 21, depth: 1 },
   { position: [20, 0, -4] as [number, number, number], width: 21, depth: 1 },
+  // Door collision boxes - make doors solid
+  ...doors.map(door => ({
+    position: door.position as [number, number, number],
+    width: 3.5,
+    depth: 0.5
+  }))
 ];
 
 function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearDoorIndex: number | null }) {
@@ -129,6 +136,76 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
             <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.8} />
           </mesh>
         </group>
+      ))}
+
+      {/* Wall-mounted lights */}
+      {[-25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25].map((z, i) => (
+        <React.Fragment key={`wall-lights-${i}`}>
+          {/* Left wall lights */}
+          <group position={[-9, 6, z]}>
+            <pointLight intensity={2} distance={15} color="#ffaa00" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.3, 16, 16]} />
+              <meshStandardMaterial color="#ffaa00" emissive="#ffaa00" emissiveIntensity={1} />
+            </mesh>
+          </group>
+          {/* Right wall lights */}
+          <group position={[9, 6, z]}>
+            <pointLight intensity={2} distance={15} color="#ffaa00" />
+            <mesh castShadow>
+              <sphereGeometry args={[0.3, 16, 16]} />
+              <meshStandardMaterial color="#ffaa00" emissive="#ffaa00" emissiveIntensity={1} />
+            </mesh>
+          </group>
+        </React.Fragment>
+      ))}
+
+      {/* Decorations - Plants */}
+      {[-22, -12, 8, 18].map((z, i) => (
+        <React.Fragment key={`plants-${i}`}>
+          {/* Left side plants */}
+          <group position={[-7, 0, z]}>
+            <mesh position={[0, 0.5, 0]} castShadow>
+              <cylinderGeometry args={[0.3, 0.4, 1, 16]} />
+              <meshStandardMaterial color="#8B4513" />
+            </mesh>
+            <mesh position={[0, 1.5, 0]} castShadow>
+              <sphereGeometry args={[0.6, 16, 16]} />
+              <meshStandardMaterial color="#228B22" />
+            </mesh>
+          </group>
+          {/* Right side plants */}
+          <group position={[7, 0, z]}>
+            <mesh position={[0, 0.5, 0]} castShadow>
+              <cylinderGeometry args={[0.3, 0.4, 1, 16]} />
+              <meshStandardMaterial color="#8B4513" />
+            </mesh>
+            <mesh position={[0, 1.5, 0]} castShadow>
+              <sphereGeometry args={[0.6, 16, 16]} />
+              <meshStandardMaterial color="#228B22" />
+            </mesh>
+          </group>
+        </React.Fragment>
+      ))}
+
+      {/* Decorations - Benches */}
+      {[-18, -6, 12, 22].map((z, i) => (
+        <React.Fragment key={`benches-${i}`}>
+          <group position={[-7.5, 0.5, z]}>
+            <mesh castShadow>
+              <boxGeometry args={[1.5, 0.1, 0.6]} />
+              <meshStandardMaterial color="#5a3a2a" />
+            </mesh>
+            <mesh position={[-0.5, -0.3, 0]} castShadow>
+              <boxGeometry args={[0.1, 0.6, 0.5]} />
+              <meshStandardMaterial color="#2a2a2a" />
+            </mesh>
+            <mesh position={[0.5, -0.3, 0]} castShadow>
+              <boxGeometry args={[0.1, 0.6, 0.5]} />
+              <meshStandardMaterial color="#2a2a2a" />
+            </mesh>
+          </group>
+        </React.Fragment>
       ))}
 
       {/* Doors */}

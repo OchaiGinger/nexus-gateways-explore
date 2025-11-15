@@ -84,11 +84,11 @@ export function Player({
     const moveDir = new THREE.Vector3();
     moveDir.copy(forwardVec).multiplyScalar(inputZ).addScaledVector(rightVec, inputX);
 
-    const speed = 6;
+    const speed = 3;
     if (moveDir.lengthSq() > 0.0001) {
       moveDir.normalize();
       const targetVel = moveDir.multiplyScalar(speed);
-      velocity.current.lerp(targetVel, 0.15);
+      velocity.current.lerp(targetVel, 0.08);
     } else {
       velocity.current.lerp(new THREE.Vector3(), 0.12);
     }
