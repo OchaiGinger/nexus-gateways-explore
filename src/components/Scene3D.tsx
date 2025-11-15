@@ -1,7 +1,7 @@
 // Scene3D.tsx
 import { useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { KeyboardControls, Stars, Environment } from "@react-three/drei";
+import { KeyboardControls, Stars } from "@react-three/drei";
 import { useNavigate } from "react-router-dom";
 import { Player } from "./Player";
 import { Portal } from "./Portal";
@@ -77,8 +77,6 @@ function Lights({ portals }: { portals: { position: [number, number, number]; co
           color={p.color || "#00ffff"}
         />
       ))}
-
-      <Environment preset="city" />
     </>
   );
 }
