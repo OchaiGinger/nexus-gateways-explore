@@ -11,13 +11,13 @@ interface CameraProps {
 export function Camera({ target, onCameraRotation }: CameraProps) {
   const { camera } = useThree();
   const controlsRef = useRef<any>(null);
-  const idealOffset = useRef(new THREE.Vector3(0, 8, 15));
+  const idealOffset = useRef(new THREE.Vector3(0, 3, 8));
 
   useFrame(() => {
     if (!controlsRef.current) return;
 
-    // Smoothly update orbit controls target to follow player
-    const targetPos = new THREE.Vector3(target.x, target.y + 2, target.z);
+    // Smoothly update orbit controls target to follow player - lower target
+    const targetPos = new THREE.Vector3(target.x, target.y + 1, target.z);
     controlsRef.current.target.lerp(targetPos, 0.1);
     
     // Get camera direction for player movement
@@ -26,9 +26,9 @@ export function Camera({ target, onCameraRotation }: CameraProps) {
     cameraDirection.y = 0;
     cameraDirection.normalize();
     
-    // Calculate ideal camera position behind player
+    // Calculate ideal camera position behind player - much closer
     const distance = camera.position.distanceTo(targetPos);
-    const idealDistance = 15;
+    const idealDistance = 8;
     
     if (Math.abs(distance - idealDistance) > 0.5) {
       const direction = new THREE.Vector3().subVectors(camera.position, targetPos).normalize();
@@ -51,11 +51,11 @@ export function Camera({ target, onCameraRotation }: CameraProps) {
       ref={controlsRef}
       enablePan={false}
       enableZoom={true}
-      minDistance={10}
-      maxDistance={25}
-      minPolarAngle={Math.PI / 6}
-      maxPolarAngle={Math.PI / 2.5}
-      target={[target.x, target.y + 2, target.z]}
+      minDistance={5}
+      maxDistance={15}
+      minPolarAngle={Math.PI / 8}
+      maxPolarAngle={Math.PI / 2.2}
+      target={[target.x, target.y + 1, target.z]}
       enableDamping
       dampingFactor={0.05}
     />
