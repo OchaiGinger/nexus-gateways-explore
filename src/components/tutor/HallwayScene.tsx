@@ -50,9 +50,11 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
   return (
     <group>
       {/* Lighting */}
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[10, 20, 10]} intensity={0.8} castShadow />
-      <hemisphereLight color="#ffffff" groundColor="#444444" intensity={0.5} />
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[10, 20, 10]} intensity={1.2} castShadow />
+      <hemisphereLight color="#ffffff" groundColor="#444444" intensity={0.7} />
+      <pointLight position={[0, 8, 0]} intensity={1.5} distance={30} />
+      <pointLight position={[20, 8, -12]} intensity={1.5} distance={30} />
 
       {/* Stars background */}
       <Stars radius={100} depth={50} count={3000} factor={4} saturation={0} fade speed={1} />
@@ -107,24 +109,24 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
         <meshStandardMaterial color="#0f1419" />
       </mesh>
 
-      {/* Ceiling lights */}
-      {[-20, -10, 0, 10, 20].map((z, i) => (
+      {/* Ceiling lights - brighter and more */}
+      {[-25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25].map((z, i) => (
         <group key={i} position={[0, 9.5, z]}>
-          <pointLight intensity={2} distance={20} color="#ffffff" />
+          <pointLight intensity={3} distance={25} color="#ffffff" />
           <mesh castShadow>
             <boxGeometry args={[2, 0.1, 2]} />
-            <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.5} />
+            <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.8} />
           </mesh>
         </group>
       ))}
 
       {/* Branch corridor lights */}
-      {[15, 23].map((x, i) => (
+      {[12, 15, 18, 21, 24, 27].map((x, i) => (
         <group key={`branch-${i}`} position={[x, 9.5, -12]}>
-          <pointLight intensity={2} distance={20} color="#ffffff" />
+          <pointLight intensity={3} distance={25} color="#ffffff" />
           <mesh castShadow>
             <boxGeometry args={[2, 0.1, 2]} />
-            <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.5} />
+            <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.8} />
           </mesh>
         </group>
       ))}
@@ -184,9 +186,9 @@ function Scene({ onEnterClassroom, onNearDoorChange }: { onEnterClassroom: (inde
   const handlePositionChange = (position: THREE.Vector3) => {
     setPlayerPosition(position.clone());
 
-    // Check proximity to doors
+    // Check proximity to doors - player must be very close
     let closestDoor: number | null = null;
-    let closestDistance = 3.5;
+    let closestDistance = 2.0;
 
     doors.forEach((door) => {
       const doorPos = new THREE.Vector3(...door.position);
@@ -221,7 +223,7 @@ export function HallwaySceneFPS({ onEnterClassroom }: HallwaySceneProps) {
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#000" }}>
       <Canvas
-        camera={{ position: [0, 8, 30], fov: 60 }}
+        camera={{ position: [0, 3, 28], fov: 60 }}
         shadows
         onCreated={({ gl }) => {
           gl.shadowMap.enabled = true;
