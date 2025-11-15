@@ -1,5 +1,5 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { HallwayScene } from "@/components/tutor/HallwayScene";
+import { useState } from "react";
+import { HallwaySceneFPS } from "@/components/tutor/HallwayScene";
 import { Classroom } from "@/components/tutor/Classroom";
 
 const classroomNames = [
@@ -16,31 +16,27 @@ const classroomNames = [
 ];
 
 const AITutor = () => {
-  const { classroomId } = useParams<{ classroomId?: string }>();
-  const navigate = useNavigate();
+  const [currentClassroom, setCurrentClassroom] = useState<number | null>(null);
 
   const handleEnterClassroom = (index: number) => {
-    navigate(`/ai-tutor/classroom/${index}`);
+    setCurrentClassroom(index);
   };
 
   const handleExitClassroom = () => {
-    navigate("/ai-tutor");
+    setCurrentClassroom(null);
   };
 
-  // Show classroom if classroomId param exists
-  if (classroomId !== undefined) {
-    const classroomIndex = parseInt(classroomId, 10);
-    if (!isNaN(classroomIndex) && classroomIndex >= 0 && classroomIndex < classroomNames.length) {
-      return (
-        <Classroom
-          roomName={classroomNames[classroomIndex]}
-          onExit={handleExitClassroom}
-        />
-      );
-    }
+  // Show classroom if selected, otherwise show hallway
+  if (currentClassroom !== null) {
+    return (
+      <Classroom
+        roomName={classroomNames[currentClassroom]}
+        onExit={handleExitClassroom}
+      />
+    );
   }
 
-  return <HallwayScene onEnterClassroom={handleEnterClassroom} />;
+  return <HallwaySceneFPS onEnterClassroom={handleEnterClassroom} />;
 };
 
 export default AITutor;

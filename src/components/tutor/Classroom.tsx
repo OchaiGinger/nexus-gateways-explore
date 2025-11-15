@@ -1,166 +1,226 @@
-import { useState, useEffect, useRef } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Stars, Environment, OrbitControls } from "@react-three/drei";
-import * as THREE from "three";
-import { Desk } from "./Desk";
-import { Door } from "./Door";
-import { Button } from "@/components/ui/button";
-import ClassroomPlayer from "./ClassroomPlayer";
-import { useMultiplayer } from "@/hooks/useMultiplayer";
-import { OtherPlayer } from "./OtherPlayer";
-import { useProximityChat } from "@/hooks/useProximityChat";
-import { ProximityChat } from "./ProximityChat";
+import React from 'react';
+import * as THREE from 'three';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Text } from '@react-three/drei';
+import { Desk } from './Desk';
 
-export function Classroom({ roomName, onExit }: { roomName: string; onExit: () => void }) {
-  const [nearSeatIndex, setNearSeatIndex] = useState<number | null>(null);
-  const [isSitting, setIsSitting] = useState(false);
-  const [sittingPosition, setSittingPosition] = useState<THREE.Vector3 | null>(null);
-  const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 0, 5));
-  const [playerRotation, setPlayerRotation] = useState(Math.PI);
-  const cameraControlsRef = useRef<any>(null);
+interface ClassroomProps {
+  roomName: string;
+  onExit?: () => void;
+}
 
-  // Multiplayer integration
-  const { otherPlayers } = useMultiplayer({
-    roomType: 'classroom',
-    roomId: roomName,
-    localPosition: playerPosition,
-    localRotation: playerRotation,
-    isSitting,
-    seatIndex: nearSeatIndex,
-  });
-
-  const {
-    nearbyPlayer,
-    chatOpen,
-    messages,
-    unreadCount,
-    openChat,
-    closeChat,
-    sendMessage,
-  } = useProximityChat(playerPosition, otherPlayers);
-
-  // Dynamic desk generation - always have 2 base desks + 1 extra
-  const [seatPositions, setSeatPositions] = useState<{ position: [number, number, number] }[]>([
-    { position: [-3, 0, 3] },
-    { position: [3, 0, 3] },
-  ]);
-
-  useEffect(() => {
-    const activePlayers = otherPlayers.size + 1;
-    const neededSeats = Math.max(2, activePlayers + 1);
-    
-    if (neededSeats !== seatPositions.length) {
-      const newSeats: { position: [number, number, number] }[] = [];
-      const rowSpacing = 3;
-      const colSpacing = 3;
-      const seatsPerRow = 3;
-      
-      for (let i = 0; i < neededSeats; i++) {
-        const row = Math.floor(i / seatsPerRow);
-        const col = (i % seatsPerRow) - 1;
-        newSeats.push({
-          position: [col * colSpacing, 0, 3 - row * rowSpacing]
-        });
-      }
-      
-      setSeatPositions(newSeats);
-    }
-  }, [otherPlayers.size]);
-
-  const handleSitDown = () => {
-    if (nearSeatIndex !== null) {
-      const seat = seatPositions[nearSeatIndex];
-      setSittingPosition(new THREE.Vector3(...seat.position));
-      setIsSitting(true);
-    }
-  };
-
-  const handleStandUp = () => {
-    setIsSitting(false);
-    setSittingPosition(null);
-  };
-
+export function Classroom({ roomName, onExit }: ClassroomProps) {
   return (
-    <div className="w-full h-screen relative bg-gradient-to-b from-gray-900 to-gray-800">
-      <Canvas shadows camera={{ position: [0, 3, 8], fov: 75 }}>
-        <fog attach="fog" args={["#1a1a2e", 10, 50]} />
-        <Stars radius={100} depth={50} count={1000} factor={2} />
-        <Environment preset="sunset" />
-
-        <ambientLight intensity={0.4} />
-        <directionalLight position={[5, 10, 5]} intensity={1} castShadow />
-        <hemisphereLight color="#a0a0ff" intensity={0.4} />
-        
-        <OrbitControls
-          ref={cameraControlsRef}
-          target={[playerPosition.x, playerPosition.y + 1, playerPosition.z]}
-          enablePan={false}
-          enableZoom={true}
-          minDistance={2}
-          maxDistance={8}
-          minPolarAngle={Math.PI / 6}
-          maxPolarAngle={Math.PI / 2.5}
-          enableDamping
-          dampingFactor={0.05}
-        />
-
-        {/* Classroom geometry */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-          <planeGeometry args={[20, 20]} />
-          <meshStandardMaterial color="#2a2a4a" />
-        </mesh>
-
-        <ClassroomPlayer
-          seats={seatPositions}
-          onSeatProximity={setNearSeatIndex}
-          isSitting={isSitting}
-          sittingPosition={sittingPosition}
-          onSitRequest={handleSitDown}
-          onStandRequest={handleStandUp}
-          onPositionChange={setPlayerPosition}
-          onRotationChange={setPlayerRotation}
-          cameraRef={cameraControlsRef}
-        />
-        
-        {Array.from(otherPlayers.values()).map((otherPlayer) => (
-          <OtherPlayer
-            key={otherPlayer.userId}
-            position={otherPlayer.position}
-            rotationY={otherPlayer.rotationY}
-            color={otherPlayer.color}
-          />
-        ))}
-
-        {seatPositions.map((seat, i) => (
-          <Desk
-            key={i}
-            position={seat.position}
-            isHighlighted={nearSeatIndex === i && !isSitting}
-          />
-        ))}
-
-        <Door position={[0, 0, -9]} label="Exit" isClassInSession={false} />
+    <div style={{ width: '100vw', height: '100vh', background: '#000' }}>
+      <Canvas camera={{ position: [0, 5, 10], fov: 60 }}>
+        <ClassroomScene roomName={roomName} onExit={onExit} />
       </Canvas>
-
-      <Button onClick={onExit} className="absolute top-4 left-4 z-50" variant="secondary">
-        Exit Classroom
-      </Button>
       
-      <ProximityChat
-        nearbyPlayerId={nearbyPlayer?.id || null}
-        chatOpen={chatOpen}
-        messages={messages}
-        unreadCount={unreadCount}
-        onOpenChat={openChat}
-        onCloseChat={closeChat}
-        onSendMessage={sendMessage}
-      />
+      {/* Exit button overlay */}
+      <button
+        onClick={onExit}
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          padding: '12px 24px',
+          background: 'linear-gradient(45deg, #ff4444, #ff6b6b)',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          fontSize: '16px',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          zIndex: 100,
+          boxShadow: '0 4px 15px rgba(255, 68, 68, 0.4)'
+        }}
+      >
+        Exit Classroom
+      </button>
 
-      {nearSeatIndex !== null && !isSitting && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white/90 px-6 py-3 rounded-lg">
-          <p className="text-sm font-semibold">Press E to sit</p>
-        </div>
-      )}
+      {/* Classroom info */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '20px',
+          left: '20px',
+          background: 'rgba(255, 255, 255, 0.9)',
+          padding: '15px',
+          borderRadius: '10px',
+          border: '2px solid #00ffff',
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          fontWeight: 'bold'
+        }}
+      >
+        <div style={{ marginBottom: '5px' }}>🏫 {roomName}</div>
+        <div>📍 Interactive Classroom</div>
+        <div>👥 12 Student Desks</div>
+      </div>
     </div>
+  );
+}
+
+function ClassroomScene({ roomName, onExit }: ClassroomProps) {
+  return (
+    <group>
+      {/* Floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[20, 20]} />
+        <meshStandardMaterial color="#1a1a2e" />
+      </mesh>
+
+      {/* Walls */}
+      {/* Back wall */}
+      <mesh position={[0, 5, -10]} receiveShadow>
+        <boxGeometry args={[20, 10, 0.2]} />
+        <meshStandardMaterial color="#16213e" />
+      </mesh>
+
+      {/* Left wall */}
+      <mesh position={[-10, 5, 0]} receiveShadow>
+        <boxGeometry args={[0.2, 10, 20]} />
+        <meshStandardMaterial color="#16213e" />
+      </mesh>
+
+      {/* Right wall */}
+      <mesh position={[10, 5, 0]} receiveShadow>
+        <boxGeometry args={[0.2, 10, 20]} />
+        <meshStandardMaterial color="#16213e" />
+      </mesh>
+
+      {/* Front wall with door */}
+      <mesh position={[0, 5, 10]} receiveShadow>
+        <boxGeometry args={[20, 10, 0.2]} />
+        <meshStandardMaterial color="#16213e" />
+      </mesh>
+
+      {/* Door opening in front wall */}
+      <mesh position={[0, 2.5, 9.9]} receiveShadow>
+        <boxGeometry args={[3, 5, 0.3]} />
+        <meshStandardMaterial color="#5a4a3a" />
+      </mesh>
+
+      {/* Exit door trigger */}
+      <mesh 
+        position={[0, 2.5, 9.8]} 
+        onClick={onExit}
+        onPointerEnter={() => document.body.style.cursor = 'pointer'}
+        onPointerLeave={() => document.body.style.cursor = 'default'}
+      >
+        <boxGeometry args={[3, 5, 0.1]} />
+        <meshBasicMaterial color="#8B4513" transparent opacity={0.5} />
+      </mesh>
+
+      {/* Ceiling */}
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 10, 0]}>
+        <planeGeometry args={[20, 20]} />
+        <meshStandardMaterial color="#0f1419" />
+      </mesh>
+
+      {/* Whiteboard */}
+      <mesh position={[0, 5, -9.9]} castShadow>
+        <boxGeometry args={[8, 3, 0.1]} />
+        <meshStandardMaterial color="#f0f0f0" />
+      </mesh>
+
+      {/* Whiteboard frame */}
+      <mesh position={[0, 5, -9.85]} castShadow>
+        <boxGeometry args={[8.2, 3.2, 0.05]} />
+        <meshStandardMaterial color="#2a2a2a" />
+      </mesh>
+
+      {/* Room title above whiteboard */}
+      <Text
+        position={[0, 7.5, -9.8]}
+        fontSize={0.5}
+        color="#00ffff"
+        anchorX="center"
+        anchorY="middle"
+      >
+        {roomName}
+      </Text>
+
+      {/* Exit sign above door */}
+      <Text
+        position={[0, 8, 9.8]}
+        fontSize={0.3}
+        color="#ff4444"
+        anchorX="center"
+        anchorY="middle"
+      >
+        EXIT
+      </Text>
+
+      {/* Desks in rows */}
+      {/* Row 1 */}
+      <Desk position={[-3, 0, -5]} />
+      <Desk position={[0, 0, -5]} />
+      <Desk position={[3, 0, -5]} />
+
+      {/* Row 2 */}
+      <Desk position={[-3, 0, -2]} />
+      <Desk position={[0, 0, -2]} isOccupied />
+      <Desk position={[3, 0, -2]} />
+
+      {/* Row 3 */}
+      <Desk position={[-3, 0, 1]} />
+      <Desk position={[0, 0, 1]} />
+      <Desk position={[3, 0, 1]} isOccupied />
+
+      {/* Row 4 */}
+      <Desk position={[-3, 0, 4]} />
+      <Desk position={[0, 0, 4]} />
+      <Desk position={[3, 0, 4]} />
+
+      {/* Teacher's desk */}
+      <group position={[0, 0, -8]}>
+        <mesh position={[0, 0.9, 0]} castShadow>
+          <boxGeometry args={[2, 0.1, 1]} />
+          <meshStandardMaterial color="#5a3a2a" />
+        </mesh>
+        <mesh position={[-0.8, 0.45, -0.35]} castShadow>
+          <cylinderGeometry args={[0.06, 0.06, 0.9, 16]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
+        <mesh position={[0.8, 0.45, -0.35]} castShadow>
+          <cylinderGeometry args={[0.06, 0.06, 0.9, 16]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
+        <mesh position={[-0.8, 0.45, 0.35]} castShadow>
+          <cylinderGeometry args={[0.06, 0.06, 0.9, 16]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
+        <mesh position={[0.8, 0.45, 0.35]} castShadow>
+          <cylinderGeometry args={[0.06, 0.06, 0.9, 16]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
+      </group>
+
+      {/* Ceiling lights */}
+      {[-5, 0, 5].map((x, i) => (
+        <group key={i} position={[x, 9.5, 0]}>
+          <pointLight intensity={1} distance={15} color="#ffffff" />
+          <mesh castShadow>
+            <boxGeometry args={[1, 0.1, 1]} />
+            <meshStandardMaterial 
+              color="#ffffff" 
+              emissive="#ffffff" 
+              emissiveIntensity={0.5}
+            />
+          </mesh>
+        </group>
+      ))}
+
+      {/* Ambient light */}
+      <ambientLight intensity={0.6} />
+      <directionalLight
+        position={[10, 10, 5]}
+        intensity={0.8}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+    </group>
   );
 }
