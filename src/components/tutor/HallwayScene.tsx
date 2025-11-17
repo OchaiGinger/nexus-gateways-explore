@@ -6,6 +6,12 @@ import * as THREE from "three";
 import { Player } from "@/components/Player";
 import { Camera } from "@/components/Camera";
 import { Door } from "./Door";
+import { RemotePlayer } from "@/components/RemotePlayer";
+import { useWebSocket, RemotePlayerData, WebSocketService } from "@/services/WebSocketService";
+import { getRandomHallwaySpawn, getPlayerColor } from "@/utils/spawnPositions";
+import { ProximityChatPopup } from "@/components/ProximityChatPopup";
+import { SidePanel } from "@/components/SidePanel";
+import { ChatService } from "@/services/ChatService";
 
 interface HallwaySceneProps {
   onEnterClassroom: (index: number) => void;
@@ -63,8 +69,8 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
       <pointLight position={[0, 8, 0]} intensity={1.5} distance={30} />
       <pointLight position={[20, 8, -12]} intensity={1.5} distance={30} />
 
-      {/* Stars background */}
-      <Stars radius={100} depth={50} count={3000} factor={4} saturation={0} fade speed={1} />
+      {/* Stars background - reduced for faster load */}
+      <Stars radius={100} depth={50} count={1000} factor={4} saturation={0} fade speed={1} />
 
       {/* Floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -116,8 +122,8 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
         <meshStandardMaterial color="#0f1419" />
       </mesh>
 
-      {/* Ceiling lights - brighter and more */}
-      {[-25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25].map((z, i) => (
+      {/* Ceiling lights - reduced for faster load */}
+      {[-25, -10, 5, 20].map((z, i) => (
         <group key={i} position={[0, 9.5, z]}>
           <pointLight intensity={3} distance={25} color="#ffffff" />
           <mesh castShadow>
@@ -127,8 +133,8 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
         </group>
       ))}
 
-      {/* Branch corridor lights */}
-      {[12, 15, 18, 21, 24, 27].map((x, i) => (
+      {/* Branch corridor lights - reduced */}
+      {[14, 20, 26].map((x, i) => (
         <group key={`branch-${i}`} position={[x, 9.5, -12]}>
           <pointLight intensity={3} distance={25} color="#ffffff" />
           <mesh castShadow>
@@ -138,8 +144,8 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
         </group>
       ))}
 
-      {/* Wall-mounted lights */}
-      {[-25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25].map((z, i) => (
+      {/* Wall-mounted lights - reduced */}
+      {[-20, 0, 20].map((z, i) => (
         <React.Fragment key={`wall-lights-${i}`}>
           {/* Left wall lights */}
           <group position={[-9, 6, z]}>
@@ -160,8 +166,8 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
         </React.Fragment>
       ))}
 
-      {/* Decorations - Plants */}
-      {[-22, -12, 8, 18].map((z, i) => (
+      {/* Decorations - Plants - reduced */}
+      {[-12, 8].map((z, i) => (
         <React.Fragment key={`plants-${i}`}>
           {/* Left side plants */}
           <group position={[-7, 0, z]}>
@@ -188,8 +194,8 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
         </React.Fragment>
       ))}
 
-      {/* Decorations - Benches */}
-      {[-18, -6, 12, 22].map((z, i) => (
+      {/* Decorations - Benches - reduced */}
+      {[-6, 12].map((z, i) => (
         <React.Fragment key={`benches-${i}`}>
           <group position={[-7.5, 0.5, z]}>
             <mesh castShadow>
@@ -234,10 +240,23 @@ function HallwayEnvironment({ doors, nearDoorIndex }: { doors: DoorInfo[], nearD
   );
 }
 
-function Scene({ onEnterClassroom, onNearDoorChange }: { onEnterClassroom: (index: number) => void, onNearDoorChange: (index: number | null) => void }) {
+function Scene({ onEnterClassroom, onNearDoorChange, onNearbyPlayerChange }: { onEnterClassroom: (index: number) => void, onNearDoorChange: (index: number | null) => void, onNearbyPlayerChange?: (playerId: string | null, playerName: string | null) => void }) {
   const [playerPosition, setPlayerPosition] = useState(new THREE.Vector3(0, 0, 20));
   const keysRef = useRef<Record<string, boolean>>({});
   const nearDoorIndexRef = useRef<number | null>(null);
+
+  // WebSocket multiplayer
+  const { isConnected, remotePlayers, ws } = useWebSocket("Student", "ws://localhost:3000");
+  const initialSpawnRef = useRef(false);
+
+  // Set random spawn position on first load
+  useEffect(() => {
+    if (!initialSpawnRef.current) {
+      const spawn = getRandomHallwaySpawn();
+      setPlayerPosition(spawn.position);
+      initialSpawnRef.current = true;
+    }
+  }, []);
 
   // Keyboard listener for E key
   useEffect(() => {
@@ -263,6 +282,15 @@ function Scene({ onEnterClassroom, onNearDoorChange }: { onEnterClassroom: (inde
   const handlePositionChange = (position: THREE.Vector3) => {
     setPlayerPosition(position.clone());
 
+    // Update WebSocket with new position
+    if (ws && isConnected) {
+      // Calculate rotation from camera direction
+      const cameraDirection = new THREE.Vector3(0, 0, -1);
+      const rotation = Math.atan2(cameraDirection.x, cameraDirection.z);
+
+      ws.updatePosition(position, rotation, false);
+    }
+
     // Check proximity to doors - player must be very close
     let closestDoor: number | null = null;
     let closestDistance = 2.0;
@@ -278,6 +306,27 @@ function Scene({ onEnterClassroom, onNearDoorChange }: { onEnterClassroom: (inde
 
     nearDoorIndexRef.current = closestDoor;
     onNearDoorChange(closestDoor);
+
+    // Check proximity to other players (5 unit reach for chat)
+    let closestPlayer: { id: string; name: string } | null = null;
+    let closestPlayerDist = 5;
+
+    remotePlayers.forEach((player) => {
+      if (!player.isInClassroom) {
+        const playerPos = new THREE.Vector3(
+          player.position.x,
+          player.position.y,
+          player.position.z
+        );
+        const dist = position.distanceTo(playerPos);
+        if (dist < closestPlayerDist && dist > 0) {
+          closestPlayerDist = dist;
+          closestPlayer = { id: player.id, name: player.username };
+        }
+      }
+    });
+
+    onNearbyPlayerChange?.(closestPlayer?.id || null, closestPlayer?.name || null);
   };
 
   return (
@@ -288,14 +337,41 @@ function Scene({ onEnterClassroom, onNearDoorChange }: { onEnterClassroom: (inde
         onPositionChange={handlePositionChange}
         portals={[]}
         walls={hallwayWalls}
+        remotePlayers={Array.from(remotePlayers.values())
+          .filter(p => !p.isInClassroom)
+          .map(p => ({ position: p.position }))}
       />
       <Camera target={playerPosition} />
+
+      {/* Render remote players */}
+      {Array.from(remotePlayers.values()).map((player: RemotePlayerData) => (
+        <RemotePlayer
+          key={player.id}
+          playerData={player}
+          isInSameScene={!player.isInClassroom}
+          color={getPlayerColor(player.id)}
+        />
+      ))}
     </>
   );
 }
 
 export function HallwaySceneFPS({ onEnterClassroom }: HallwaySceneProps) {
   const [nearDoorIndex, setNearDoorIndex] = useState<number | null>(null);
+  const { isConnected, remotePlayers, ws } = useWebSocket("Student", "ws://localhost:3000");
+  const remotePlayerCount = remotePlayers.size;
+  const [sidePanelOpen, setSidePanelOpen] = useState(false);
+  const [chatPopupOpen, setChatPopupOpen] = useState(false);
+  const [nearbyPlayerId, setNearbyPlayerId] = useState<string | null>(null);
+  const [nearbyPlayerName, setNearbyPlayerName] = useState<string | null>(null);
+
+  // Initialize chat service with current player info
+  useEffect(() => {
+    const chatService = ChatService.getInstance();
+    if (ws) {
+      chatService.setCurrentUser(ws.getPlayerId(), "Student", ws);
+    }
+  }, [ws]);
 
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#000" }}>
@@ -307,8 +383,35 @@ export function HallwaySceneFPS({ onEnterClassroom }: HallwaySceneProps) {
           gl.shadowMap.type = THREE.PCFSoftShadowMap;
         }}
       >
-        <Scene onEnterClassroom={onEnterClassroom} onNearDoorChange={setNearDoorIndex} />
+        <Scene onEnterClassroom={onEnterClassroom} onNearDoorChange={setNearDoorIndex} onNearbyPlayerChange={(playerId, playerName) => { setNearbyPlayerId(playerId); setNearbyPlayerName(playerName); }} />
       </Canvas>
+
+      {/* Multiplayer status indicator */}
+      <div
+        style={{
+          position: "absolute",
+          top: "100px",
+          right: "20px",
+          background: "rgba(0, 0, 0, 0.8)",
+          padding: "12px 16px",
+          borderRadius: "8px",
+          color: isConnected ? "#00ff00" : "#ff4444",
+          fontFamily: "monospace",
+          fontSize: "12px",
+          border: `2px solid ${isConnected ? "#00ff00" : "#ff4444"}`,
+          minWidth: "140px",
+        }}
+      >
+        <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+          {isConnected ? "🟢 Connected" : "🔴 Disconnected"}
+        </div>
+        <div>Players online: {remotePlayerCount + 1}</div>
+        {remotePlayerCount > 0 && (
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "#aaaaaa" }}>
+            {remotePlayerCount} other {remotePlayerCount === 1 ? "student" : "students"}
+          </div>
+        )}
+      </div>
 
       {/* Controls UI */}
       <div
@@ -352,7 +455,92 @@ export function HallwaySceneFPS({ onEnterClassroom }: HallwaySceneProps) {
         <div style={{ marginBottom: "5px" }}>🏫 AI Tutor Hallway</div>
         <div>📚 {doors.length} Classrooms Available</div>
         <div>✨ Explore and Learn</div>
+        {remotePlayerCount > 0 && (
+          <div style={{ marginTop: "8px", color: "#0066ff", fontSize: "12px" }}>
+            👥 Multiplayer Active
+          </div>
+        )}
       </div>
+
+      {/* Side Panel Toggle Button */}
+      <button
+        onClick={() => setSidePanelOpen(true)}
+        style={{
+          position: "absolute",
+          top: "100px",
+          left: "20px",
+          width: "50px",
+          height: "50px",
+          background: "linear-gradient(135deg, #00ffff, #0099ff)",
+          color: "white",
+          border: "none",
+          borderRadius: "50%",
+          fontSize: "24px",
+          cursor: "pointer",
+          zIndex: 95,
+          boxShadow: "0 4px 15px rgba(0, 255, 255, 0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        title="Open Game Panel"
+      >
+        ≡
+      </button>
+
+      {/* Side Panel */}
+      <SidePanel
+        isOpen={sidePanelOpen}
+        onOpenChange={setSidePanelOpen}
+        playerCount={remotePlayerCount + 1}
+        wsService={ws}
+        onSelectConversation={(playerId) => {
+          const player = remotePlayers.get(playerId);
+          if (player) {
+            setNearbyPlayerId(playerId);
+            setNearbyPlayerName(player.username);
+            setChatPopupOpen(true);
+          }
+        }}
+      />
+
+      {/* Proximity Chat Popup */}
+      <ProximityChatPopup
+        isOpen={chatPopupOpen}
+        nearbyPlayerId={nearbyPlayerId}
+        nearbyPlayerName={nearbyPlayerName}
+        onClose={() => setChatPopupOpen(false)}
+        currentUserId={ws?.getPlayerId() || ""}
+        currentUsername="Student"
+        wsService={ws}
+      />
+
+      {/* Proximity indicator (shows when near player) */}
+      {nearbyPlayerId && !chatPopupOpen && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "20px",
+            right: "20px",
+            background: "rgba(0, 255, 150, 0.2)",
+            border: "2px solid #00ff96",
+            padding: "15px 20px",
+            borderRadius: "10px",
+            color: "#00ff96",
+            fontFamily: "monospace",
+            fontSize: "14px",
+            cursor: "pointer",
+            backdropFilter: "blur(5px)",
+            zIndex: 90,
+          }}
+          onClick={() => setChatPopupOpen(true)}
+        >
+          <div style={{ fontWeight: "bold", marginBottom: "5px" }}>
+            🎤 {nearbyPlayerName} is nearby!
+          </div>
+          <div style={{ fontSize: "12px" }}>Click or press C to chat</div>
+        </div>
+      )}
     </div>
   );
 }

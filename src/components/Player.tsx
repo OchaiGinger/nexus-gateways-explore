@@ -15,6 +15,9 @@ interface PlayerProps {
   walls?: { position: [number, number, number]; width: number; depth: number }[];
   onPortalProximity?: (portalName: string | null) => void;
   onPortalEnter?: (route: string, label: string) => void;
+  isSitting?: boolean;
+  sittingPosition?: [number, number, number];
+  remotePlayers?: Array<{ position: { x: number; y: number; z: number } }>;
 }
 
 export function Player({
@@ -23,12 +26,20 @@ export function Player({
   walls = [],
   onPortalProximity,
   onPortalEnter,
+  isSitting = false,
+  sittingPosition,
+  remotePlayers = [],
 }: PlayerProps) {
   const groupRef = useRef<THREE.Group | null>(null);
   const velocity = useRef(new THREE.Vector3());
   const lastPortalCheck = useRef(0);
   const nearPortal = useRef<string | null>(null);
   const [characterScene, setCharacterScene] = useState<THREE.Object3D | null>(null);
+  const GROUND_LEVEL = 1; // Y position when standing on floor
+  const GRAVITY = 30; // gravity acceleration
+  const isGrounded = useRef(true);
+  const PLAYER_RADIUS = 0.5; // Player collision radius
+  const MIN_PLAYER_DISTANCE = 1.2; // Minimum distance between players
 
   // ✅ Load the GLB character model from public/models
   useEffect(() => {
@@ -64,6 +75,14 @@ export function Player({
   // main movement logic
   useFrame((state, delta) => {
     if (!groupRef.current) return;
+
+    // If sitting, snap to seat position and don't move
+    if (isSitting && sittingPosition) {
+      groupRef.current.position.set(sittingPosition[0], GROUND_LEVEL, sittingPosition[2]);
+      velocity.current.set(0, 0, 0);
+      onPositionChange?.(groupRef.current.position);
+      return;
+    }
 
     const forward = keys.current["KeyW"] || keys.current["ArrowUp"];
     const backward = keys.current["KeyS"] || keys.current["ArrowDown"];
@@ -110,6 +129,23 @@ export function Player({
       ) {
         collided = true;
         break;
+      }
+    }
+
+    // Player-to-player collision detection
+    if (!collided && remotePlayers && remotePlayers.length > 0) {
+      for (const remotePlayer of remotePlayers) {
+        const distance = Math.sqrt(
+          Math.pow(predictedX - remotePlayer.position.x, 2) +
+          Math.pow(predictedZ - remotePlayer.position.z, 2)
+        );
+
+        // Check if too close to another player
+        if (distance < MIN_PLAYER_DISTANCE) {
+          collided = true;
+          console.log(`⚠️ Collision detected: Too close to player (${distance.toFixed(2)}m, min: ${MIN_PLAYER_DISTANCE}m)`);
+          break;
+        }
       }
     }
 
